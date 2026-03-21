@@ -1,0 +1,37 @@
+{
+  "name": "@deckgraph/backend",
+  "version": "0.0.1",
+  "description": "Deckgraph backend - CLI and WebSocket server",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "deckgraph": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/ws": "^8.5.14",
+    "@vitest/coverage-v8": "^2.1.9",
+    "pino-pretty": "^13.0.0",
+    "typescript-eslint": "^8.19.1",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "@deckgraph/shared": "workspace:*",
+    "commander": "^13.1.0",
+    "fast-glob": "^3.3.3",
+    "fuse.js": "^7.1.0",
+    "js-yaml": "^4.1.1",
+    "open": "^10.1.0",
+    "pino": "^10.3.1",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  }
+}

@@ -48,11 +48,28 @@ interface ManifestResult {
   /** Detected module name (from manifest metadata or directory name) */
   readonly moduleName: string
   /** Declared dependencies with versions and scopes */
-  readonly dependencies: readonly Dependency[]
+  readonly dependencies: readonly MinimalDependency[]
   /** Lock file found and parsed (enables precise version resolution) */
   readonly hasLockFile: boolean
   /** Ecosystem-specific extras (e.g. npm scripts, Python extras, Go module path) */
   readonly metadata: Readonly<Record<string, unknown>>
+}
+```
+
+## MinimalDependency
+
+Minimal dependency representation returned by adapters during manifest parsing. Adapters only know about these 4 fields at parse time; the full `Dependency` type has additional fields (`ecosystem`, `source`, `concerns`, `usedInFiles`, `transitiveDeps`, `registryMeta`) populated during later analysis phases.
+
+```typescript
+interface MinimalDependency {
+  /** Package name as the ecosystem knows it */
+  readonly name: string
+  /** Resolved/installed version */
+  readonly version: string
+  /** Raw constraint string (semver, PEP 440, Cargo req, etc.) */
+  readonly constraint: string
+  /** Generalized scope */
+  readonly scope: DependencyScope
 }
 ```
 

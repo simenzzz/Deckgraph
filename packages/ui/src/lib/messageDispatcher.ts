@@ -1,0 +1,46 @@
+/**
+ * Routes ServerMessage to the appropriate Zustand stores.
+ */
+
+import type { ServerMessage } from '@deckgraph/shared';
+import { useConnectionStore } from '@/stores/connectionStore';
+import { useProjectStore } from '@/stores/projectStore';
+import { useViewStore } from '@/stores/viewStore';
+
+/**
+ * Dispatch a validated server message to the correct store.
+ */
+export function dispatchServerMessage(message: ServerMessage): void {
+  switch (message.type) {
+    case 'project_overview':
+      useProjectStore.getState().setProject(message.data);
+      break;
+
+    case 'view_result':
+      useViewStore.getState().setResult(message.data);
+      break;
+
+    case 'progress':
+      useProjectStore.getState().setProgress(message);
+      break;
+
+    case 'error':
+      useConnectionStore.getState().setError(message.message);
+      // H4: Clear loading state so UI doesn't show infinite spinner
+      useViewStore.getState().setLoading(false);
+      break;
+
+    case 'module_updated':
+      useProjectStore.getState().updateModule(message.module);
+      break;
+
+    case 'dependency_enriched':
+      // Phase 2: will update specific dependency in projectStore
+      break;
+
+    default: {
+      const _exhaustive: never = message;
+      return _exhaustive;
+    }
+  }
+}

@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+package-lock.json
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+*.tsbuildinfo
+.turbo/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude
+.claude/
+
+# Temporary
+tmp/
+temp/

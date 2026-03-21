@@ -111,7 +111,7 @@ The Phase 1 checklist in CLAUDE.md contains 18 items — too large for a single 
 
 ---
 
-## Phase 1f: Python + Go + Rust + Java Adapters (L)
+## Phase 1f: Python + Go + Rust + Java Adapters (L) ✅
 
 **Goal:** All 5 ecosystem adapters with manifest parsing. No cross-lang, no concern tags.
 
@@ -135,7 +135,7 @@ The Phase 1 checklist in CLAUDE.md contains 18 items — too large for a single 
 
 ---
 
-## Phase 1g: Cross-Language Edges + Concern Tags (M-L)
+## Phase 1g: Cross-Language Edges + Concern Tags (M-L) [COMPLETE]
 
 **Goal:** Cross-language edge detection across all 5 detectors, concern tagging, and UI updates for both.
 

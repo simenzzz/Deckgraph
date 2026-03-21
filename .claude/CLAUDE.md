@@ -55,13 +55,13 @@ packages/
 **Phase 1: Foundation** (Active)
 
 Progress:
-- [ ] 1a: Monorepo setup (pnpm + Turborepo) + shared types + `npx deckgraph` entry point
-- [ ] 1b: Module discovery + adapter system + JS/TS manifest parsing
-- [ ] 1c: Unified dependency graph (DAG) + query engine (ViewQuery → ViewResult)
-- [ ] 1d: WebSocket server (localhost-only, no auth) + protocol
-- [ ] 1e: UI skeleton + Overview dashboard + Module Explorer (JS/TS vertical slice)
-- [ ] 1f: Python + Go + Rust + Java adapters (manifest parsing only)
-- [ ] 1g: Cross-language edge detection (all 5 detectors) + concern tags
+- [x] 1a: Monorepo setup (pnpm + Turborepo) + shared types + `npx deckgraph` entry point
+- [x] 1b: Module discovery + adapter system + JS/TS manifest parsing
+- [x] 1c: Unified dependency graph (DAG) + query engine (ViewQuery → ViewResult)
+- [x] 1d: WebSocket server (localhost-only, no auth) + protocol
+- [x] 1e: UI skeleton + Overview dashboard + Module Explorer (JS/TS vertical slice)
+- [x] 1f: Python + Go + Rust + Java adapters (manifest parsing only)
+- [x] 1g: Cross-language edge detection (all 5 detectors) + concern tags
 
 **When updating this section:** Check off completed items and move to the next phase when all items are done.
 
@@ -153,6 +153,12 @@ General coding style, security, testing, and hook rules are defined in `.claude/
 
 All external data is Zod-validated: registry API responses, user WebSocket messages, parsed manifest content. Never trust external data.
 
+### Phase Tracking
+
+When a phase or sub-phase is completed, update **both**:
+1. The checklist in this file (under "Implementation Phases")
+2. The corresponding entry in [docs/implementation_roadmap.md](../docs/implementation_roadmap.md)
+
 ---
 
 ## Development Commands
@@ -188,13 +194,13 @@ For testing methodology (TDD workflow, coverage requirements), see `.claude/rule
 ## Implementation Phases
 
 ### Phase 1: Foundation (Active)
-- [ ] 1a: Monorepo scaffold + shared types + `npx deckgraph` entry point
-- [ ] 1b: Module discovery + adapter system + JS/TS manifest parsing
-- [ ] 1c: Unified dependency graph (DAG) + query engine (ViewQuery → ViewResult)
-- [ ] 1d: WebSocket server (localhost-only, no auth) + protocol
-- [ ] 1e: UI skeleton + Overview dashboard + Module Explorer (JS/TS vertical slice)
-- [ ] 1f: Python + Go + Rust + Java adapters (manifest parsing only)
-- [ ] 1g: Cross-language edge detection (all 5 detectors) + concern tags
+- [x] 1a: Monorepo scaffold + shared types + `npx deckgraph` entry point
+- [x] 1b: Module discovery + adapter system + JS/TS manifest parsing
+- [x] 1c: Unified dependency graph (DAG) + query engine (ViewQuery → ViewResult)
+- [x] 1d: WebSocket server (localhost-only, no auth) + protocol
+- [x] 1e: UI skeleton + Overview dashboard + Module Explorer (JS/TS vertical slice)
+- [x] 1f: Python + Go + Rust + Java adapters (manifest parsing only)
+- [x] 1g: Cross-language edge detection (all 5 detectors) + concern tags
 
 ### Phase 2: Deep Analysis
 - [ ] JS/TS import analysis + ImportPackageMap
