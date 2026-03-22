@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DependencyList } from '@/components/explorer/DependencyList';
 import { useViewStore } from '@/stores/viewStore';
+import { useDetailStore } from '@/stores/detailStore';
 import type { ViewResult } from '@deckgraph/shared';
 
 const mockResult: ViewResult = {
@@ -38,6 +39,7 @@ describe('DependencyList', () => {
       selectedModulePath: null,
       currentView: 'explorer',
     });
+    useDetailStore.setState({ selectedDep: null, isEnriching: false });
   });
 
   it('shows prompt when no module selected', () => {
@@ -66,5 +68,22 @@ describe('DependencyList', () => {
     render(<DependencyList />);
     expect(screen.getByText('runtime')).toBeInTheDocument();
     expect(screen.getByText('dev')).toBeInTheDocument();
+  });
+
+  it('clicking dep name sets detailStore selection', () => {
+    useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
+    render(<DependencyList />);
+
+    fireEvent.click(screen.getByTestId('dep-link-react'));
+    const state = useDetailStore.getState();
+    expect(state.selectedDep).toEqual({ name: 'react', ecosystem: 'npm' });
+  });
+
+  it('dep names are rendered as clickable links', () => {
+    useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
+    render(<DependencyList />);
+
+    expect(screen.getByTestId('dep-link-react')).toBeInTheDocument();
+    expect(screen.getByTestId('dep-link-vitest')).toBeInTheDocument();
   });
 });

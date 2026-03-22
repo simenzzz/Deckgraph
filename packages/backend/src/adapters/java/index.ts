@@ -6,18 +6,21 @@
  */
 
 import type { EcosystemAdapter, ManifestResult, ParsedImport, RegistryMeta } from '@deckgraph/shared';
+import type { RegistryCache } from '../registryCache.js';
+import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { parseJavaManifests } from './manifestParser.js';
+import { analyzeJavaImports } from './importAnalyzer.js';
+import { queryMavenRegistry } from './registryClient.js';
 
 const JAVA_SOURCE_EXTENSIONS: readonly string[] = ['.java', '.kt', '.kts'];
 
 /**
  * Create a Java/Maven ecosystem adapter.
- *
- * Phase 1: parseManifests is fully implemented.
- * Phase 2: analyzeImports will be implemented later.
- * Phase 3: queryRegistry will be implemented later.
  */
-export function createJavaAdapter(): EcosystemAdapter {
+export function createJavaAdapter(
+  cache?: RegistryCache,
+  rateLimiter?: RegistryRateLimiter,
+): EcosystemAdapter {
   return {
     ecosystem: 'maven',
     manifestFiles: ['pom.xml', 'build.gradle', 'build.gradle.kts'],
@@ -27,12 +30,13 @@ export function createJavaAdapter(): EcosystemAdapter {
       return parseJavaManifests(projectRoot, modulePath);
     },
 
-    analyzeImports(_filePath: string, _source: string): readonly ParsedImport[] {
-      throw new Error('Import analysis not implemented yet (Phase 2)');
+    analyzeImports(filePath: string, source: string): Promise<readonly ParsedImport[]> {
+      return analyzeJavaImports(filePath, source);
     },
 
-    async queryRegistry(_packageName: string): Promise<RegistryMeta | null> {
-      return null;
+    async queryRegistry(packageName: string): Promise<RegistryMeta | null> {
+      if (!cache || !rateLimiter) return null;
+      return queryMavenRegistry(packageName, cache, rateLimiter);
     },
   };
 }

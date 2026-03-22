@@ -6,6 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ServerMessage, ErrorMessage, ViewResult, ViewSummary } from '@deckgraph/shared';
 import type { ClientConnection, ProgressEmitter, ServerState } from '../../ws/types.js';
 import type { ScanResult } from '../../scanner/scanner.js';
+import { createAdapterRegistry } from '../../adapters/registry.js';
+import { createImportPackageMap } from '../../adapters/importPackageMap.js';
+import { createRegistryCache } from '../../adapters/registryCache.js';
+import { createRegistryRateLimiter } from '../../adapters/registryRateLimiter.js';
 
 vi.mock('../../scanner/scanner.js', () => ({
   scanProject: vi.fn(),
@@ -15,12 +19,18 @@ vi.mock('../../graph/queryEngine.js', () => ({
   executeQuery: vi.fn(),
 }));
 
+vi.mock('../../analysis/importResolver.js', () => ({
+  resolveImports: vi.fn(),
+}));
+
 import { scanProject } from '../../scanner/scanner.js';
 import { executeQuery } from '../../graph/queryEngine.js';
+import { resolveImports } from '../../analysis/importResolver.js';
 import { handleMessage } from '../../ws/protocol.js';
 
 const mockScanProject = vi.mocked(scanProject);
 const mockExecuteQuery = vi.mocked(executeQuery);
+const mockResolveImports = vi.mocked(resolveImports);
 
 function createMockConnection(): ClientConnection {
   return {
@@ -34,6 +44,10 @@ function createMockState(overrides: Partial<ServerState> = {}): ServerState {
     scanResult: null,
     projectRoot: '/test/project',
     isScanning: false,
+    registry: createAdapterRegistry(),
+    packageMap: createImportPackageMap(),
+    registryCache: createRegistryCache({ maxSize: 10, ttlMs: 60_000 }),
+    rateLimiter: createRegistryRateLimiter(),
     ...overrides,
   };
 }
@@ -288,26 +302,98 @@ describe('handleMessage', () => {
     });
   });
 
-  // ========== Phase 2 stubs ==========
+  // ========== analyze_imports ==========
 
-  describe('phase 2 stubs', () => {
-    it('analyze_imports returns not-yet-available error', async () => {
+  describe('analyze_imports', () => {
+    it('returns error when no scan data', async () => {
       const state = createMockState();
 
       const raw = JSON.stringify({
         type: 'analyze_imports',
         requestId: 'r4',
-        modulePath: 'packages/backend',
+        modulePath: 'packages/app',
       });
       const result = await handleMessage(raw, connection, state, emitProgress);
 
       expect(result.type).toBe('error');
       const error = result as ErrorMessage;
       expect(error.requestId).toBe('r4');
-      expect(error.message).toContain('not yet available');
+      expect(error.suggestion).toContain('scan_project');
     });
 
-    it('enrich_dependency returns not-yet-available error', async () => {
+    it('returns error when module not found', async () => {
+      const state = createMockState({ scanResult: createMockScanResult() });
+
+      const raw = JSON.stringify({
+        type: 'analyze_imports',
+        requestId: 'r4',
+        modulePath: 'nonexistent/module',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toContain('Module not found');
+    });
+
+    it('returns module_updated on successful analysis', async () => {
+      const scanResult = createMockScanResult();
+      const state = createMockState({ scanResult });
+
+      const updatedModule = {
+        ...scanResult.project.modules[0]!,
+        analysisState: 'imports-resolved' as const,
+        dependencies: [
+          {
+            ...scanResult.project.modules[0]!.dependencies[0]!,
+            usedInFiles: ['packages/app/src/index.ts'],
+            source: 'both' as const,
+          },
+        ],
+      };
+
+      mockResolveImports.mockResolvedValue({
+        updatedModule,
+        unusedDeps: [],
+        importOnlyDeps: [],
+      });
+
+      const raw = JSON.stringify({
+        type: 'analyze_imports',
+        requestId: 'r4',
+        modulePath: 'packages/app',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('module_updated');
+      if (result.type === 'module_updated') {
+        expect(result.module.analysisState).toBe('imports-resolved');
+      }
+    });
+
+    it('returns error when module already analyzed', async () => {
+      const scanResult = createMockScanResult();
+      // Set the module to already analyzed
+      (scanResult.project.modules as any)[0].analysisState = 'imports-resolved';
+      const state = createMockState({ scanResult });
+
+      const raw = JSON.stringify({
+        type: 'analyze_imports',
+        requestId: 'r4',
+        modulePath: 'packages/app',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toContain('already analyzed');
+    });
+  });
+
+  // ========== enrich_dependency ==========
+
+  describe('enrich_dependency', () => {
+    it('returns error when no scan data', async () => {
       const state = createMockState();
 
       const raw = JSON.stringify({
@@ -321,7 +407,129 @@ describe('handleMessage', () => {
       expect(result.type).toBe('error');
       const error = result as ErrorMessage;
       expect(error.requestId).toBe('r5');
-      expect(error.message).toContain('not yet available');
+      expect(error.suggestion).toContain('scan_project');
+    });
+
+    it('returns error when adapter not found for ecosystem', async () => {
+      const scanResult = createMockScanResult();
+      const state = createMockState({ scanResult });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'cargo',
+        packageName: 'serde',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toContain('No adapter registered');
+    });
+
+    it('returns error when dependency not in any module', async () => {
+      const scanResult = createMockScanResult();
+      // Register a mock npm adapter that returns registry data
+      const registry = createAdapterRegistry();
+      registry.register({
+        ecosystem: 'npm',
+        manifestFiles: ['package.json'],
+        sourceExtensions: ['.js', '.ts'],
+        parseManifests: vi.fn(),
+        analyzeImports: vi.fn(),
+        queryRegistry: vi.fn().mockResolvedValue({
+          latestVersion: '19.0.0',
+          description: 'A JS library',
+          license: 'MIT',
+          homepage: null,
+          downloads: null,
+          deprecated: false,
+          publishedAt: null,
+        }),
+      });
+      const state = createMockState({ scanResult, registry });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'npm',
+        packageName: 'nonexistent-pkg',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toContain('not found in any scanned module');
+    });
+
+    it('returns dependency_enriched on success', async () => {
+      const scanResult = createMockScanResult();
+      const registry = createAdapterRegistry();
+      registry.register({
+        ecosystem: 'npm',
+        manifestFiles: ['package.json'],
+        sourceExtensions: ['.js', '.ts'],
+        parseManifests: vi.fn(),
+        analyzeImports: vi.fn(),
+        queryRegistry: vi.fn().mockResolvedValue({
+          latestVersion: '18.3.0',
+          description: 'A JavaScript library for building UIs',
+          license: 'MIT',
+          homepage: 'https://reactjs.org',
+          downloads: 1_000_000,
+          deprecated: false,
+          publishedAt: '2024-01-01T00:00:00Z',
+        }),
+      });
+      const state = createMockState({ scanResult, registry });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'npm',
+        packageName: 'react',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('dependency_enriched');
+      if (result.type === 'dependency_enriched') {
+        expect(result.dependency.name).toBe('react');
+        expect(result.dependency.registryMeta).not.toBeNull();
+        expect(result.dependency.registryMeta!.latestVersion).toBe('18.3.0');
+      }
+    });
+
+    it('emits progress during enrichment', async () => {
+      const scanResult = createMockScanResult();
+      const registry = createAdapterRegistry();
+      registry.register({
+        ecosystem: 'npm',
+        manifestFiles: ['package.json'],
+        sourceExtensions: ['.js', '.ts'],
+        parseManifests: vi.fn(),
+        analyzeImports: vi.fn(),
+        queryRegistry: vi.fn().mockResolvedValue({
+          latestVersion: '18.3.0',
+          description: '',
+          license: null,
+          homepage: null,
+          downloads: null,
+          deprecated: false,
+          publishedAt: null,
+        }),
+      });
+      const state = createMockState({ scanResult, registry });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'npm',
+        packageName: 'react',
+      });
+      await handleMessage(raw, connection, state, emitProgress);
+
+      expect(emitProgress).toHaveBeenCalledWith('r5', expect.stringContaining('npm'), 0);
+      expect(emitProgress).toHaveBeenCalledWith('r5', 'Enrichment complete', 1);
     });
   });
 });

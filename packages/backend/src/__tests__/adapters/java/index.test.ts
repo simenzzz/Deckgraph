@@ -25,11 +25,12 @@ describe('createJavaAdapter', () => {
     expect(adapter.sourceExtensions).toContain('.kts');
   });
 
-  it('throws "not implemented" for analyzeImports', () => {
+  it('analyzes imports from Java source code', async () => {
     const adapter = createJavaAdapter();
-    expect(() => adapter.analyzeImports('Main.java', 'import java.util.*;')).toThrow(
-      'not implemented',
-    );
+    const result = await adapter.analyzeImports('Main.java', 'import com.google.gson.Gson;');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.source).toBe('com.google.gson');
+    expect(result[0]!.isThirdParty).toBe(true);
   });
 
   it('returns null for queryRegistry', async () => {

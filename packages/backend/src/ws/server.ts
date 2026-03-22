@@ -1,16 +1,24 @@
 /**
  * WebSocket server lifecycle management.
  *
- * Creates a localhost-only WebSocket server that accepts client connections,
- * routes messages through the protocol handler, and supports graceful shutdown.
+ * Creates a localhost-only HTTP server that serves UI assets and upgrades
+ * WebSocket connections. Routes messages through the protocol handler
+ * and supports graceful shutdown.
  */
 
+import { createServer as createHttpServer } from 'node:http';
+import type { Server as HttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type WebSocket from 'ws';
 import type { ServerMessage } from '@deckgraph/shared';
 import { createLogger } from '../logger.js';
+import { createDefaultRegistry } from '../adapters/index.js';
+import { createImportPackageMap } from '../adapters/importPackageMap.js';
+import { createRegistryCache } from '../adapters/registryCache.js';
+import { createRegistryRateLimiter } from '../adapters/registryRateLimiter.js';
 import { createProgressEmitter } from './progress.js';
 import { handleMessage } from './protocol.js';
+import { createStaticHandler } from './staticServer.js';
 import type { ClientConnection, ServerState } from './types.js';
 
 const logger = createLogger('server');
@@ -25,6 +33,8 @@ export interface ServerOptions {
   readonly host?: string;
   /** Absolute path to the project root */
   readonly projectRoot: string;
+  /** Absolute path to the UI dist directory (optional) */
+  readonly uiDistPath?: string;
 }
 
 /**
@@ -45,19 +55,31 @@ export interface DeckgraphServer {
 
 /**
  * Create a new Deckgraph WebSocket server.
+ *
+ * Uses an HTTP server that:
+ * - Serves static UI assets from uiDistPath (if provided and exists)
+ * - Upgrades WebSocket connections on the same port
  */
 export function createServer(options: ServerOptions): DeckgraphServer {
   const port = options.port ?? 3333;
   const host = options.host ?? '127.0.0.1';
 
+  const registryCache = createRegistryCache();
+  const rateLimiter = createRegistryRateLimiter();
+
   const state: ServerState = {
     scanResult: null,
     projectRoot: options.projectRoot,
     isScanning: false,
+    registry: createDefaultRegistry(registryCache, rateLimiter),
+    packageMap: createImportPackageMap(),
+    registryCache,
+    rateLimiter,
   };
 
   const clients = new Set<ClientConnection>();
   let clientCounter = 0;
+  let httpServer: HttpServer | null = null;
   let wss: WebSocketServer | null = null;
 
   function onConnection(ws: WebSocket): void {
@@ -102,25 +124,42 @@ export function createServer(options: ServerOptions): DeckgraphServer {
   return {
     start(): Promise<void> {
       return new Promise((resolve, reject) => {
-        wss = new WebSocketServer({ port, host });
+        // Build the static file handler (null if distPath missing)
+        const staticHandler = options.uiDistPath
+          ? createStaticHandler(options.uiDistPath)
+          : null;
 
-        wss.on('connection', onConnection);
-
-        wss.on('listening', () => {
-          logger.info({ host, port }, 'Server listening');
-          resolve();
+        httpServer = createHttpServer((req, res) => {
+          if (staticHandler) {
+            staticHandler(req, res);
+          } else {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('UI not built. Run: pnpm --filter @deckgraph/ui build');
+          }
         });
 
+        wss = new WebSocketServer({ server: httpServer });
+        wss.on('connection', onConnection);
+
         wss.on('error', (error) => {
-          logger.error({ error: error.message }, 'Server error');
+          logger.error({ error: error.message }, 'WebSocket server error');
+        });
+
+        httpServer.on('error', (error) => {
+          logger.error({ error: error.message }, 'HTTP server error');
           reject(error);
+        });
+
+        httpServer.listen(port, host, () => {
+          logger.info({ host, port }, 'Server listening');
+          resolve();
         });
       });
     },
 
     stop(): Promise<void> {
-      return new Promise((resolve) => {
-        if (!wss) {
+      return new Promise((resolve, reject) => {
+        if (!httpServer) {
           resolve();
           return;
         }
@@ -130,10 +169,29 @@ export function createServer(options: ServerOptions): DeckgraphServer {
         }
         clients.clear();
 
-        wss.close(() => {
-          logger.info('Server stopped');
+        if (wss) {
+          wss.close();
           wss = null;
-          resolve();
+        }
+
+        const server = httpServer;
+
+        // H5: Force-close keep-alive connections after 5s timeout
+        const forceCloseTimer = setTimeout(() => {
+          logger.warn('Force-closing remaining connections after timeout');
+          server.closeAllConnections();
+        }, 5_000);
+
+        server.close((err) => {
+          clearTimeout(forceCloseTimer);
+          httpServer = null;
+          if (err) {
+            logger.error({ error: err.message }, 'Error during server close');
+            reject(err);
+          } else {
+            logger.info('Server stopped');
+            resolve();
+          }
         });
       });
     },

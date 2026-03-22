@@ -21,6 +21,8 @@ import { discoverModules } from '../discovery/moduleDiscovery.js';
 import type { DiscoveredModule } from '../discovery/moduleDiscovery.js';
 import { createDefaultRegistry } from '../adapters/index.js';
 import { buildGraph } from '../graph/dependencyGraph.js';
+import { tagDependencies } from '../concern/index.js';
+import { detectCrossEdges } from '../crosslang/index.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('scanner');
@@ -67,23 +69,29 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const discovered = await discoverModules(projectRoot, config);
   logger.info({ moduleCount: discovered.length }, 'Modules discovered');
 
-  const modules = await buildModules(discovered, projectRoot, registry);
-  const graph = buildGraph(modules);
+  const rawModules = await buildModules(discovered, projectRoot, registry);
+  const taggedModules = tagDependencies(rawModules, config);
+  const graph = buildGraph(taggedModules);
+  const crossEdges = await detectCrossEdges(projectRoot, taggedModules);
 
   const project: Project = {
     root: projectRoot,
     config,
-    modules,
-    crossEdges: [],
+    modules: taggedModules,
+    crossEdges,
     lastScannedAt: new Date().toISOString(),
   };
 
   logger.info(
-    { moduleCount: modules.length, depCount: countDeps(modules) },
+    {
+      moduleCount: taggedModules.length,
+      depCount: countDeps(taggedModules),
+      crossEdgeCount: crossEdges.length,
+    },
     'Scan complete',
   );
 
-  return { project, graph };
+  return { project, graph: { ...graph, crossEdges } };
 }
 
 /**

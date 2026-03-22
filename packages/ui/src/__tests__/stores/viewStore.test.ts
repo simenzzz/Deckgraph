@@ -70,4 +70,9 @@ describe('viewStore', () => {
     useViewStore.getState().setView('explorer');
     expect(useViewStore.getState().currentView).toBe('explorer');
   });
+
+  it('setView accepts health view', () => {
+    useViewStore.getState().setView('health');
+    expect(useViewStore.getState().currentView).toBe('health');
+  });
 });

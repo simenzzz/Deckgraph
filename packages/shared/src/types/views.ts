@@ -86,6 +86,15 @@ export interface ModuleView {
 }
 
 /**
+ * How far behind a dependency is from its latest version.
+ */
+export type OutdatedSeverity =
+  | 'up-to-date'
+  | 'patch-behind'
+  | 'minor-behind'
+  | 'major-behind';
+
+/**
  * Aggregate counts for the filtered result set.
  * Displayed in overview cards and filter badges.
  */

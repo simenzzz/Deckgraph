@@ -2,7 +2,7 @@
  * Tests for the project scanner.
  */
 
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import type {
   AdapterRegistry,
   EcosystemAdapter,
@@ -24,12 +24,22 @@ vi.mock('../../adapters/index.js', () => ({
   createDefaultRegistry: vi.fn(),
 }));
 
+vi.mock('../../crosslang/index.js', () => ({
+  detectCrossEdges: vi.fn(),
+}));
+
 import { loadConfig } from '../../config/configLoader.js';
 import { discoverModules } from '../../discovery/moduleDiscovery.js';
+import { detectCrossEdges } from '../../crosslang/index.js';
 import { scanProject } from '../../scanner/scanner.js';
 
 const mockLoadConfig = vi.mocked(loadConfig);
 const mockDiscoverModules = vi.mocked(discoverModules);
+const mockDetectCrossEdges = vi.mocked(detectCrossEdges);
+
+beforeEach(() => {
+  mockDetectCrossEdges.mockResolvedValue([]);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -48,7 +58,7 @@ function createMockAdapter(
       hasLockFile: false,
       metadata: {},
     }),
-    analyzeImports: (): readonly ParsedImport[] => [],
+    analyzeImports: async (): Promise<readonly ParsedImport[]> => [],
     queryRegistry: async (): Promise<RegistryMeta | null> => null,
     ...overrides,
   };
@@ -61,6 +71,7 @@ function createMockRegistry(
     register: vi.fn(),
     getAdapterForManifest: (fileName: string) => adapters.get(fileName) ?? null,
     getAdapterForExtension: () => null,
+    getAdapterForEcosystem: () => null,
     getRegisteredEcosystems: () => [...new Set([...adapters.values()].map((a) => a.ecosystem))],
   };
 }
@@ -222,7 +233,7 @@ describe('scanProject', () => {
     expect(dep.constraint).toBe('^18.0.0');
     expect(dep.scope).toBe('runtime');
     expect(dep.source).toBe('manifest');
-    expect(dep.concerns).toEqual([]);
+    expect(dep.concerns).toEqual(['ui']);
     expect(dep.usedInFiles).toBeNull();
     expect(dep.transitiveDeps).toBeNull();
     expect(dep.registryMeta).toBeNull();
@@ -244,9 +255,10 @@ describe('scanProject', () => {
     expect(project.lastScannedAt).toContain('T');
   });
 
-  it('always returns empty crossEdges', async () => {
+  it('returns crossEdges from detector', async () => {
     mockLoadConfig.mockResolvedValue(null);
     mockDiscoverModules.mockResolvedValue([]);
+    mockDetectCrossEdges.mockResolvedValue([]);
 
     const { project } = await scanProject({
       projectRoot: '/test/project',
@@ -254,6 +266,81 @@ describe('scanProject', () => {
     });
 
     expect(project.crossEdges).toEqual([]);
+  });
+
+  it('populates concern tags on dependencies', async () => {
+    mockLoadConfig.mockResolvedValue(null);
+    const discovered: DiscoveredModule[] = [
+      { path: 'packages/app', manifests: ['package.json'], ecosystem: 'npm' },
+    ];
+    mockDiscoverModules.mockResolvedValue(discovered);
+
+    const adapter = createMockAdapter({
+      parseManifests: async () => ({
+        moduleName: 'app',
+        dependencies: [
+          { name: 'express', version: '4.18.0', constraint: '^4.18.0', scope: 'runtime' },
+        ],
+        hasLockFile: false,
+        metadata: {},
+      }),
+    });
+
+    const registry = createMockRegistry(new Map([['package.json', adapter]]));
+    const { project } = await scanProject({ projectRoot: '/test/project', registry });
+
+    const dep = project.modules[0]!.dependencies[0]!;
+    expect(dep.concerns).toContain('http');
+    expect(dep.concerns).toContain('server');
+  });
+
+  it('applies concern overrides from config', async () => {
+    mockLoadConfig.mockResolvedValue({
+      ignorePaths: [],
+      concernOverrides: { 'my-pkg': ['custom-tag'] },
+    });
+    const discovered: DiscoveredModule[] = [
+      { path: 'packages/app', manifests: ['package.json'], ecosystem: 'npm' },
+    ];
+    mockDiscoverModules.mockResolvedValue(discovered);
+
+    const adapter = createMockAdapter({
+      parseManifests: async () => ({
+        moduleName: 'app',
+        dependencies: [
+          { name: 'my-pkg', version: '1.0.0', constraint: '^1.0.0', scope: 'runtime' },
+        ],
+        hasLockFile: false,
+        metadata: {},
+      }),
+    });
+
+    const registry = createMockRegistry(new Map([['package.json', adapter]]));
+    const { project } = await scanProject({ projectRoot: '/test/project', registry });
+
+    expect(project.modules[0]!.dependencies[0]!.concerns).toEqual(['custom-tag']);
+  });
+
+  it('includes crossEdges on graph', async () => {
+    mockLoadConfig.mockResolvedValue(null);
+    mockDiscoverModules.mockResolvedValue([]);
+
+    const fakeEdge = {
+      from: { module: 'a', ecosystem: 'npm' as const },
+      to: { module: 'b', ecosystem: 'pypi' as const },
+      type: 'proto' as const,
+      evidence: 'test',
+      confidence: 0.9,
+    };
+    mockDetectCrossEdges.mockResolvedValue([fakeEdge]);
+
+    const { project, graph } = await scanProject({
+      projectRoot: '/test/project',
+      registry: createMockRegistry(),
+    });
+
+    expect(project.crossEdges).toHaveLength(1);
+    expect(graph.crossEdges).toHaveLength(1);
   });
 
   it('passes config through', async () => {

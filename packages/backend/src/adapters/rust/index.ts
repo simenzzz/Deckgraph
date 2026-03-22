@@ -6,18 +6,21 @@
  */
 
 import type { EcosystemAdapter, ManifestResult, ParsedImport, RegistryMeta } from '@deckgraph/shared';
+import type { RegistryCache } from '../registryCache.js';
+import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { parseRustManifests } from './manifestParser.js';
+import { analyzeRustImports } from './importAnalyzer.js';
+import { queryCargoRegistry } from './registryClient.js';
 
 const RUST_SOURCE_EXTENSIONS: readonly string[] = ['.rs'];
 
 /**
  * Create a Rust/Cargo ecosystem adapter.
- *
- * Phase 1: parseManifests is fully implemented.
- * Phase 2: analyzeImports will be implemented later.
- * Phase 3: queryRegistry will be implemented later.
  */
-export function createRustAdapter(): EcosystemAdapter {
+export function createRustAdapter(
+  cache?: RegistryCache,
+  rateLimiter?: RegistryRateLimiter,
+): EcosystemAdapter {
   return {
     ecosystem: 'cargo',
     manifestFiles: ['Cargo.toml'],
@@ -27,12 +30,13 @@ export function createRustAdapter(): EcosystemAdapter {
       return parseRustManifests(projectRoot, modulePath);
     },
 
-    analyzeImports(_filePath: string, _source: string): readonly ParsedImport[] {
-      throw new Error('Import analysis not implemented yet (Phase 2)');
+    analyzeImports(filePath: string, source: string): Promise<readonly ParsedImport[]> {
+      return analyzeRustImports(filePath, source);
     },
 
-    async queryRegistry(_packageName: string): Promise<RegistryMeta | null> {
-      return null;
+    async queryRegistry(packageName: string): Promise<RegistryMeta | null> {
+      if (!cache || !rateLimiter) return null;
+      return queryCargoRegistry(packageName, cache, rateLimiter);
     },
   };
 }

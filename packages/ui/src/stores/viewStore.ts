@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import type { ViewResult } from '@deckgraph/shared';
 
-export type CurrentView = 'overview' | 'explorer';
+export type CurrentView = 'overview' | 'explorer' | 'health';
 
 export interface ViewState {
   readonly result: ViewResult | null;

@@ -6,18 +6,21 @@
  */
 
 import type { EcosystemAdapter, ManifestResult, ParsedImport, RegistryMeta } from '@deckgraph/shared';
+import type { RegistryCache } from '../registryCache.js';
+import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { parsePythonManifests } from './manifestParser.js';
+import { analyzePythonImports } from './importAnalyzer.js';
+import { queryPypiRegistry } from './registryClient.js';
 
 const PYTHON_SOURCE_EXTENSIONS: readonly string[] = ['.py', '.pyi'];
 
 /**
  * Create a Python/PyPI ecosystem adapter.
- *
- * Phase 1: parseManifests is fully implemented.
- * Phase 2: analyzeImports will be implemented later.
- * Phase 3: queryRegistry will be implemented later.
  */
-export function createPythonAdapter(): EcosystemAdapter {
+export function createPythonAdapter(
+  cache?: RegistryCache,
+  rateLimiter?: RegistryRateLimiter,
+): EcosystemAdapter {
   return {
     ecosystem: 'pypi',
     manifestFiles: ['pyproject.toml', 'setup.cfg', 'requirements.txt', 'Pipfile'],
@@ -27,12 +30,13 @@ export function createPythonAdapter(): EcosystemAdapter {
       return parsePythonManifests(projectRoot, modulePath);
     },
 
-    analyzeImports(_filePath: string, _source: string): readonly ParsedImport[] {
-      throw new Error('Import analysis not implemented yet (Phase 2)');
+    analyzeImports(filePath: string, source: string): Promise<readonly ParsedImport[]> {
+      return analyzePythonImports(filePath, source);
     },
 
-    async queryRegistry(_packageName: string): Promise<RegistryMeta | null> {
-      return null;
+    async queryRegistry(packageName: string): Promise<RegistryMeta | null> {
+      if (!cache || !rateLimiter) return null;
+      return queryPypiRegistry(packageName, cache, rateLimiter);
     },
   };
 }

@@ -4,7 +4,7 @@
  */
 
 import { create } from 'zustand';
-import type { Module, Project, ProgressMessage } from '@deckgraph/shared';
+import type { Dependency, Module, Project, ProgressMessage } from '@deckgraph/shared';
 
 export interface ProjectState {
   readonly project: Project | null;
@@ -17,6 +17,7 @@ export interface ProjectActions {
   setScanning: (isScanning: boolean) => void;
   setProgress: (progress: ProgressMessage) => void;
   updateModule: (updated: Module) => void;
+  updateDependency: (updated: Dependency) => void;
   clear: () => void;
 }
 
@@ -46,6 +47,29 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           modules: state.project.modules.map((m) =>
             m.path === updated.path ? updated : m,
           ),
+        },
+      };
+    }),
+
+  updateDependency: (updated) =>
+    set((state) => {
+      if (!state.project) return state;
+      return {
+        ...state,
+        project: {
+          ...state.project,
+          modules: state.project.modules.map((m) => {
+            const hasMatch = m.dependencies.some(
+              (d) => d.name === updated.name && d.ecosystem === updated.ecosystem,
+            );
+            if (!hasMatch) return m;
+            return {
+              ...m,
+              dependencies: m.dependencies.map((d) =>
+                d.name === updated.name && d.ecosystem === updated.ecosystem ? updated : d,
+              ),
+            };
+          }),
         },
       };
     }),

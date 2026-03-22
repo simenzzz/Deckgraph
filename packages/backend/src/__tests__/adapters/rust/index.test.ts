@@ -21,9 +21,12 @@ describe('createRustAdapter', () => {
     expect(adapter.sourceExtensions).toContain('.rs');
   });
 
-  it('throws "not implemented" for analyzeImports', () => {
+  it('analyzes imports from Rust source code', async () => {
     const adapter = createRustAdapter();
-    expect(() => adapter.analyzeImports('main.rs', 'use std::io;')).toThrow('not implemented');
+    const result = await adapter.analyzeImports('main.rs', 'use serde::Deserialize;');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.source).toBe('serde');
+    expect(result[0]!.isThirdParty).toBe(true);
   });
 
   it('returns null for queryRegistry', async () => {

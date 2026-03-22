@@ -47,6 +47,10 @@ export function createAdapterRegistry(): AdapterRegistry {
       return byExtension.get(extension) ?? null;
     },
 
+    getAdapterForEcosystem(ecosystem: Ecosystem): EcosystemAdapter | null {
+      return byEcosystem.get(ecosystem) ?? null;
+    },
+
     getRegisteredEcosystems(): readonly Ecosystem[] {
       return [...byEcosystem.keys()];
     },

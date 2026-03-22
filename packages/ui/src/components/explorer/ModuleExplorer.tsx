@@ -1,18 +1,28 @@
 /**
  * Module Explorer view: FilterBar + ModuleList + DependencyList split pane
  * + collapsible CrossEdgeList section.
+ *
+ * When a dependency is selected via detailStore, the right pane shows
+ * DependencyDetail instead of DependencyList.
  */
 
 import { FilterBar } from './FilterBar';
 import { ModuleList } from './ModuleList';
 import { DependencyList } from './DependencyList';
 import { CrossEdgeList } from './CrossEdgeList';
+import { DependencyDetail } from '@/components/detail';
 import { Separator } from '@/components/ui/separator';
-import { useFilterStore, useViewStore } from '@/stores';
+import { useFilterStore, useViewStore, useDetailStore } from '@/stores';
+import type { WsClient } from '@/lib/wsClient';
 
-export function ModuleExplorer() {
+interface ModuleExplorerProps {
+  readonly wsClient: WsClient | null;
+}
+
+export function ModuleExplorer({ wsClient }: ModuleExplorerProps) {
   const showCrossEdges = useFilterStore((s) => s.showCrossEdges);
   const result = useViewStore((s) => s.result);
+  const selectedDep = useDetailStore((s) => s.selectedDep);
 
   const crossEdges = result?.crossEdges ?? [];
   const showSection = showCrossEdges && crossEdges.length > 0;
@@ -27,7 +37,11 @@ export function ModuleExplorer() {
         </div>
         <Separator orientation="vertical" />
         <div className="w-1/2 overflow-auto rounded-lg border p-3">
-          <DependencyList />
+          {selectedDep ? (
+            <DependencyDetail wsClient={wsClient} />
+          ) : (
+            <DependencyList />
+          )}
         </div>
       </div>
       {showSection && (

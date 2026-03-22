@@ -11,9 +11,8 @@
 
 import { readFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { Command } from 'commander';
 import { createServer } from './ws/index.js';
 import { createLogger } from './logger.js';
@@ -88,7 +87,8 @@ export async function main(argv?: readonly string[]): Promise<void> {
     process.exit(1);
   }
 
-  const server = createServer({ port, projectRoot });
+  const uiDistPath = resolve(__dirname, '../../ui/dist');
+  const server = createServer({ port, projectRoot, uiDistPath });
 
   const shutdown = async (): Promise<void> => {
     logger.info('Shutting down...');
@@ -101,7 +101,7 @@ export async function main(argv?: readonly string[]): Promise<void> {
 
   await server.start();
 
-  process.stdout.write(`Server listening on ws://127.0.0.1:${port}\n`);
+  process.stdout.write(`Server listening on http://127.0.0.1:${port}\n`);
 
   if (opts.open) {
     try {

@@ -4,7 +4,7 @@
 
 import { useViewStore, type CurrentView } from '@/stores';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, List } from 'lucide-react';
+import { LayoutDashboard, List, HeartPulse } from 'lucide-react';
 
 interface NavItem {
   readonly id: CurrentView;
@@ -15,6 +15,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'explorer', label: 'Module Explorer', icon: List },
+  { id: 'health', label: 'Health Report', icon: HeartPulse },
 ];
 
 export function Sidebar() {

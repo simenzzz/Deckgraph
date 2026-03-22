@@ -12,6 +12,7 @@ import { z } from 'zod';
 import type { ManifestResult, MinimalDependency, DependencyScope } from '@deckgraph/shared';
 import { parseManifestResult } from '@deckgraph/shared';
 import { createLogger } from '../../logger.js';
+import { readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('js-manifest-parser');
 
@@ -358,25 +359,4 @@ function buildMetadata(pkg: PackageJson): Record<string, unknown> {
   return metadata;
 }
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-async function readFileSafe(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, 'utf-8');
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Return unique directories to search: moduleDir first, then projectRoot
- * (only if different from moduleDir).
- */
-function uniqueDirs(moduleDir: string, projectRoot: string): readonly string[] {
-  if (moduleDir === projectRoot) {
-    return [moduleDir];
-  }
-  return [moduleDir, projectRoot];
-}
+// readFileSafe and uniqueDirs imported from ../utils.js

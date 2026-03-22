@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Shell } from '@/components/layout';
 import { ProjectOverview } from '@/components/overview';
 import { ModuleExplorer } from '@/components/explorer';
+import { HealthReport } from '@/components/health';
 import { useConnectionStore, useViewStore } from '@/stores';
 import { createWsClient, getWsUrl, type WsClient } from '@/lib/wsClient';
 import { dispatchServerMessage } from '@/lib/messageDispatcher';
@@ -44,7 +45,8 @@ export function App() {
   return (
     <Shell wsClient={wsClient}>
       {currentView === 'overview' && <ProjectOverview wsClient={wsClient} />}
-      {currentView === 'explorer' && <ModuleExplorer />}
+      {currentView === 'explorer' && <ModuleExplorer wsClient={wsClient} />}
+      {currentView === 'health' && <HealthReport />}
     </Shell>
   );
 }

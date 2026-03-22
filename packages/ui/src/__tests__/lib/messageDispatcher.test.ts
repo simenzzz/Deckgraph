@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import type { ServerMessage, Project, ViewResult, Module } from '@deckgraph/shared';
 import { dispatchServerMessage } from '@/lib/messageDispatcher';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useDetailStore } from '@/stores/detailStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useViewStore } from '@/stores/viewStore';
 
@@ -121,25 +122,67 @@ describe('dispatchServerMessage', () => {
     expect(useProjectStore.getState().project?.modules[0].analysisState).toBe('imports-resolved');
   });
 
-  it('handles dependency_enriched without error', () => {
-    const msg: ServerMessage = {
-      type: 'dependency_enriched',
-      requestId: 'r1',
-      dependency: {
-        name: 'react',
-        ecosystem: 'npm',
-        version: '19.0.0',
-        constraint: '^19.0.0',
-        scope: 'runtime',
-        source: 'manifest',
-        concerns: [],
-        usedInFiles: null,
-        transitiveDeps: null,
-        registryMeta: null,
+  it('dispatches dependency_enriched to projectStore and detailStore', () => {
+    const enrichedDep = {
+      name: 'react',
+      ecosystem: 'npm' as const,
+      version: '19.0.0',
+      constraint: '^19.0.0',
+      scope: 'runtime' as const,
+      source: 'manifest' as const,
+      concerns: [],
+      usedInFiles: null,
+      transitiveDeps: null,
+      registryMeta: {
+        latestVersion: '19.1.0',
+        description: 'React library',
+        license: 'MIT',
+        homepage: null,
+        downloads: null,
+        deprecated: false,
+        publishedAt: null,
       },
     };
 
-    // Should not throw
-    expect(() => dispatchServerMessage(msg)).not.toThrow();
+    // Set up project with the dep
+    useProjectStore.getState().setProject({
+      ...mockProject,
+      modules: [{
+        path: 'pkg/a',
+        name: 'a',
+        ecosystem: 'npm',
+        manifests: ['package.json'],
+        dependencies: [{
+          name: 'react',
+          ecosystem: 'npm',
+          version: '19.0.0',
+          constraint: '^19.0.0',
+          scope: 'runtime',
+          source: 'manifest',
+          concerns: [],
+          usedInFiles: null,
+          transitiveDeps: null,
+          registryMeta: null,
+        }],
+        analysisState: 'manifest-only',
+      }],
+    });
+
+    useDetailStore.setState({ isEnriching: true });
+
+    const msg: ServerMessage = {
+      type: 'dependency_enriched',
+      requestId: 'r1',
+      dependency: enrichedDep,
+    };
+
+    dispatchServerMessage(msg);
+
+    // Check projectStore was updated
+    const dep = useProjectStore.getState().project?.modules[0].dependencies[0];
+    expect(dep?.registryMeta?.latestVersion).toBe('19.1.0');
+
+    // Check detailStore enriching was cleared
+    expect(useDetailStore.getState().isEnriching).toBe(false);
   });
 });

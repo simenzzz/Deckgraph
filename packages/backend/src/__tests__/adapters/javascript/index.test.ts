@@ -28,11 +28,12 @@ describe('createJavaScriptAdapter', () => {
     expect(adapter.sourceExtensions).toContain('.cts');
   });
 
-  it('throws "not implemented" for analyzeImports', () => {
+  it('analyzes imports from JS/TS source code', async () => {
     const adapter = createJavaScriptAdapter();
-    expect(() => adapter.analyzeImports('test.ts', 'import x from "y"')).toThrow(
-      'not implemented',
-    );
+    const result = await adapter.analyzeImports('test.ts', 'import x from "y"');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.source).toBe('y');
+    expect(result[0]!.isThirdParty).toBe(true);
   });
 
   it('returns null for queryRegistry', async () => {

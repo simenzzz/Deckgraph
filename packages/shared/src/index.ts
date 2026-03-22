@@ -40,7 +40,7 @@ export type {
 // Types - Views
 // ============================================================================
 
-export type { ViewQuery, ViewResult, ModuleView, ViewSummary } from './types/views.js';
+export type { ViewQuery, ViewResult, ModuleView, ViewSummary, OutdatedSeverity } from './types/views.js';
 
 // ============================================================================
 // Types - Messages
@@ -116,6 +116,12 @@ export {
   parseViewSummary,
   parseViewResult,
 } from './schemas/views.js';
+
+// ============================================================================
+// Analysis
+// ============================================================================
+
+export { classifyOutdated } from './analysis/outdated.js';
 
 // ============================================================================
 // Schemas - Messages

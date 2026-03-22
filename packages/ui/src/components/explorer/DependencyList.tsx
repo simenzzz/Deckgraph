@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import type { Dependency, ModuleView } from '@deckgraph/shared';
-import { useViewStore } from '@/stores';
+import { useViewStore, useDetailStore } from '@/stores';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScopeBadge } from './ScopeBadge';
 import { ConcernBadge } from './ConcernBadge';
@@ -103,9 +103,19 @@ export function DependencyList() {
 }
 
 function DepRow({ dep }: { readonly dep: Dependency }) {
+  const selectDep = useDetailStore((s) => s.selectDep);
+
   return (
     <TableRow data-testid={`dep-${dep.name}`}>
-      <TableCell className="font-medium">{dep.name}</TableCell>
+      <TableCell>
+        <button
+          className="font-medium text-primary hover:underline"
+          onClick={() => selectDep({ name: dep.name, ecosystem: dep.ecosystem })}
+          data-testid={`dep-link-${dep.name}`}
+        >
+          {dep.name}
+        </button>
+      </TableCell>
       <TableCell className="font-mono text-xs">{dep.version}</TableCell>
       <TableCell className="font-mono text-xs text-muted-foreground">{dep.constraint}</TableCell>
       <TableCell>

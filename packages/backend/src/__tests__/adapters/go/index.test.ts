@@ -21,9 +21,12 @@ describe('createGoAdapter', () => {
     expect(adapter.sourceExtensions).toContain('.go');
   });
 
-  it('throws "not implemented" for analyzeImports', () => {
+  it('analyzes imports from Go source code', async () => {
     const adapter = createGoAdapter();
-    expect(() => adapter.analyzeImports('main.go', 'package main')).toThrow('not implemented');
+    const result = await adapter.analyzeImports('main.go', 'package main\nimport "github.com/gin-gonic/gin"');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.source).toBe('github.com/gin-gonic/gin');
+    expect(result[0]!.isThirdParty).toBe(true);
   });
 
   it('returns null for queryRegistry', async () => {

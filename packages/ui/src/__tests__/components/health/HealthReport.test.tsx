@@ -1,0 +1,81 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import { HealthReport } from '@/components/health/HealthReport';
+import { useProjectStore } from '@/stores/projectStore';
+import { useFilterStore } from '@/stores/filterStore';
+import type { Project } from '@deckgraph/shared';
+
+const emptyProject: Project = {
+  root: '/test',
+  config: null,
+  modules: [],
+  crossEdges: [],
+  lastScannedAt: '2024-01-01T00:00:00.000Z',
+};
+
+describe('HealthReport', () => {
+  beforeEach(() => {
+    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
+    useFilterStore.setState({ ecosystems: [], scopes: [], search: '', showCrossEdges: false, concern: null });
+  });
+
+  it('renders health report container', () => {
+    render(<HealthReport />);
+    expect(screen.getByTestId('health-report')).toBeInTheDocument();
+    expect(screen.getByText('Health Report')).toBeInTheDocument();
+  });
+
+  it('renders all three tabs', () => {
+    render(<HealthReport />);
+    expect(screen.getByTestId('tab-outdated')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-unused')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-licenses')).toBeInTheDocument();
+  });
+
+  it('shows outdated tab by default', () => {
+    useProjectStore.getState().setProject(emptyProject);
+    render(<HealthReport />);
+    // Default tab is outdated, which shows "no registry data" message
+    expect(screen.getByTestId('outdated-no-data')).toBeInTheDocument();
+  });
+
+  it('shows count badge when there are outdated deps', () => {
+    const project: Project = {
+      ...emptyProject,
+      modules: [
+        {
+          path: 'pkg/a',
+          name: 'a',
+          ecosystem: 'npm',
+          manifests: ['package.json'],
+          analysisState: 'manifest-only',
+          dependencies: [
+            {
+              name: 'old-pkg',
+              ecosystem: 'npm',
+              version: '1.0.0',
+              constraint: '^1',
+              scope: 'runtime',
+              source: 'manifest',
+              concerns: [],
+              usedInFiles: null,
+              transitiveDeps: null,
+              registryMeta: {
+                latestVersion: '3.0.0',
+                description: '',
+                license: 'MIT',
+                homepage: null,
+                downloads: null,
+                deprecated: false,
+                publishedAt: null,
+              },
+            },
+          ],
+        },
+      ],
+    };
+    useProjectStore.getState().setProject(project);
+    render(<HealthReport />);
+    expect(screen.getByTestId('tab-outdated').textContent).toContain('1');
+  });
+});

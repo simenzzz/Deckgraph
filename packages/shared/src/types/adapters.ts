@@ -34,9 +34,10 @@ export interface EcosystemAdapter {
 
   /**
    * Phase 2: AST-parse a single source file to extract imports.
+   * Async because tree-sitter grammars require WASM loading.
    * Expensive — called on-demand when user drills into a module.
    */
-  analyzeImports(filePath: string, source: string): readonly ParsedImport[];
+  analyzeImports(filePath: string, source: string): Promise<readonly ParsedImport[]>;
 
   /**
    * Phase 3: Query the ecosystem's package registry for metadata.
@@ -99,6 +100,9 @@ export interface AdapterRegistry {
 
   /** Get the adapter that handles a given source file extension */
   getAdapterForExtension(extension: string): EcosystemAdapter | null;
+
+  /** Get the adapter for a specific ecosystem */
+  getAdapterForEcosystem(ecosystem: Ecosystem): EcosystemAdapter | null;
 
   /** List all registered ecosystems */
   getRegisteredEcosystems(): readonly Ecosystem[];

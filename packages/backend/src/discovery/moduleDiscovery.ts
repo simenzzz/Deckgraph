@@ -28,8 +28,9 @@ export interface DiscoveredModule {
 /**
  * Default directories to ignore during discovery.
  * These are common build output, dependency, and cache directories.
+ * Exported for reuse by cross-language edge detectors.
  */
-const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
+export const DEFAULT_IGNORE_PATTERNS: readonly string[] = [
   '**/node_modules/**',
   '**/.git/**',
   '**/dist/**',

@@ -25,9 +25,12 @@ describe('createPythonAdapter', () => {
     expect(adapter.sourceExtensions).toContain('.pyi');
   });
 
-  it('throws "not implemented" for analyzeImports', () => {
+  it('analyzes imports from Python source code', async () => {
     const adapter = createPythonAdapter();
-    expect(() => adapter.analyzeImports('main.py', 'import flask')).toThrow('not implemented');
+    const result = await adapter.analyzeImports('main.py', 'import flask');
+    expect(result).toHaveLength(1);
+    expect(result[0]!.source).toBe('flask');
+    expect(result[0]!.isThirdParty).toBe(true);
   });
 
   it('returns null for queryRegistry', async () => {

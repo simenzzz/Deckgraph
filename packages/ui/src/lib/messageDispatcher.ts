@@ -4,6 +4,7 @@
 
 import type { ServerMessage } from '@deckgraph/shared';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useDetailStore } from '@/stores/detailStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useViewStore } from '@/stores/viewStore';
 
@@ -35,7 +36,8 @@ export function dispatchServerMessage(message: ServerMessage): void {
       break;
 
     case 'dependency_enriched':
-      // Phase 2: will update specific dependency in projectStore
+      useProjectStore.getState().updateDependency(message.dependency);
+      useDetailStore.getState().setEnriching(false);
       break;
 
     default: {

@@ -52,16 +52,14 @@ packages/
 
 ## Current Phase
 
-**Phase 1: Foundation** (Active)
+**Phase 2: Deep Analysis** (Active)
 
 Progress:
-- [x] 1a: Monorepo setup (pnpm + Turborepo) + shared types + `npx deckgraph` entry point
-- [x] 1b: Module discovery + adapter system + JS/TS manifest parsing
-- [x] 1c: Unified dependency graph (DAG) + query engine (ViewQuery → ViewResult)
-- [x] 1d: WebSocket server (localhost-only, no auth) + protocol
-- [x] 1e: UI skeleton + Overview dashboard + Module Explorer (JS/TS vertical slice)
-- [x] 1f: Python + Go + Rust + Java adapters (manifest parsing only)
-- [x] 1g: Cross-language edge detection (all 5 detectors) + concern tags
+- [x] 2a: JS/TS import analysis + ImportPackageMap
+- [x] 2b: Tree-sitter import analysis (Python, Go, Rust, Java)
+- [x] 2c: Registry enrichment + outdated detection
+- [x] 2d: Dependency Detail view + Health Report UI
+- [ ] 2e: Visual dependency graph + incremental file watching
 
 **When updating this section:** Check off completed items and move to the next phase when all items are done.
 
@@ -193,7 +191,7 @@ For testing methodology (TDD workflow, coverage requirements), see `.claude/rule
 
 ## Implementation Phases
 
-### Phase 1: Foundation (Active)
+### Phase 1: Foundation (Complete)
 - [x] 1a: Monorepo scaffold + shared types + `npx deckgraph` entry point
 - [x] 1b: Module discovery + adapter system + JS/TS manifest parsing
 - [x] 1c: Unified dependency graph (DAG) + query engine (ViewQuery → ViewResult)
@@ -202,12 +200,12 @@ For testing methodology (TDD workflow, coverage requirements), see `.claude/rule
 - [x] 1f: Python + Go + Rust + Java adapters (manifest parsing only)
 - [x] 1g: Cross-language edge detection (all 5 detectors) + concern tags
 
-### Phase 2: Deep Analysis
-- [ ] JS/TS import analysis + ImportPackageMap
-- [ ] Tree-sitter import analysis (Python, Go, Rust, Java)
-- [ ] Registry enrichment + outdated detection
-- [ ] Dependency Detail view + Health Report UI
-- [ ] Visual dependency graph (dagre/elkjs) + incremental file watching
+### Phase 2: Deep Analysis (Active)
+- [x] 2a: JS/TS import analysis + ImportPackageMap
+- [x] 2b: Tree-sitter import analysis (Python, Go, Rust, Java)
+- [x] 2c: Registry enrichment + outdated detection
+- [x] 2d: Dependency Detail view + Health Report UI
+- [ ] 2e: Visual dependency graph + incremental file watching
 
 ### Phase 3: Management (future)
 - [ ] Install/update/remove packages from UI (per-ecosystem)

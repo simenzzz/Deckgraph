@@ -11,12 +11,17 @@ import type {
   ServerMessage,
   ProjectOverviewMessage,
   ViewResultMessage,
+  ModuleUpdatedMessage,
+  DependencyEnrichedMessage,
   ErrorMessage,
+  Ecosystem,
   ViewQuery,
 } from '@deckgraph/shared';
 import { clientMessageSchema } from '@deckgraph/shared';
 import { scanProject } from '../scanner/scanner.js';
 import { executeQuery } from '../graph/queryEngine.js';
+import { resolveImports } from '../analysis/importResolver.js';
+import { addModule } from '../graph/dependencyGraph.js';
 import { createLogger } from '../logger.js';
 import type { ClientConnection, ProgressEmitter, ServerState } from './types.js';
 
@@ -98,17 +103,20 @@ async function dispatch(
         return handleSync(message.requestId, state);
 
       case 'analyze_imports':
-        return createError(
+        return await handleAnalyzeImports(
           message.requestId,
-          'Import analysis is not yet available',
-          'This feature will be available in Phase 2',
+          message.modulePath,
+          state,
+          emitProgress,
         );
 
       case 'enrich_dependency':
-        return createError(
+        return await handleEnrichDependency(
           message.requestId,
-          'Dependency enrichment is not yet available',
-          'This feature will be available in Phase 2',
+          message.ecosystem,
+          message.packageName,
+          state,
+          emitProgress,
         );
 
       default: {
@@ -215,6 +223,170 @@ function handleSync(requestId: string, state: ServerState): ServerMessage {
   };
 
   return overview;
+}
+
+/**
+ * Handle analyze_imports: run import analysis on a specific module.
+ */
+async function handleAnalyzeImports(
+  requestId: string,
+  modulePath: string,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.scanResult) {
+    return createError(
+      requestId,
+      'No scan data available',
+      'Run a scan_project request first',
+    );
+  }
+
+  const module = state.scanResult.project.modules.find(
+    (m) => m.path === modulePath,
+  );
+
+  if (!module) {
+    return createError(
+      requestId,
+      `Module not found: ${modulePath}`,
+      'Check the module path and ensure a scan has been completed',
+    );
+  }
+
+  if (module.analysisState !== 'manifest-only') {
+    return createError(
+      requestId,
+      `Module already analyzed: ${modulePath}`,
+      'Import analysis has already been run for this module',
+    );
+  }
+
+  emitProgress(requestId, `Analyzing imports for ${module.name}...`, 0);
+
+  const result = await resolveImports(
+    state.projectRoot,
+    module,
+    state.registry,
+    state.packageMap,
+  );
+
+  // Update the graph with the analyzed module (immutably)
+  const updatedGraph = addModule(
+    state.scanResult.graph,
+    result.updatedModule,
+  );
+
+  // Update the project modules list (immutably)
+  const updatedModules = state.scanResult.project.modules.map((m) =>
+    m.path === modulePath ? result.updatedModule : m,
+  );
+
+  state.scanResult = {
+    project: {
+      ...state.scanResult.project,
+      modules: updatedModules,
+    },
+    graph: updatedGraph,
+  };
+
+  emitProgress(requestId, 'Import analysis complete', 1);
+
+  const response: ModuleUpdatedMessage = {
+    type: 'module_updated',
+    requestId,
+    module: result.updatedModule,
+  };
+
+  return response;
+}
+
+/**
+ * Handle enrich_dependency: query the registry for a single dependency.
+ */
+async function handleEnrichDependency(
+  requestId: string,
+  ecosystem: Ecosystem,
+  packageName: string,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.scanResult) {
+    return createError(
+      requestId,
+      'No scan data available',
+      'Run a scan_project request first',
+    );
+  }
+
+  const adapter = state.registry.getAdapterForEcosystem(ecosystem);
+  if (!adapter) {
+    return createError(
+      requestId,
+      `No adapter registered for ecosystem: ${ecosystem}`,
+      'Supported ecosystems: npm, pypi, go, cargo, maven',
+    );
+  }
+
+  emitProgress(requestId, `Querying ${ecosystem} registry for ${packageName}...`, 0);
+
+  const registryMeta = await adapter.queryRegistry(packageName);
+
+  if (!registryMeta) {
+    return createError(
+      requestId,
+      `Package not found: ${packageName}`,
+      `Check the package name and ensure it exists on the ${ecosystem} registry`,
+    );
+  }
+
+  // Find the dependency in the project and enrich it immutably
+  let enrichedDep = null;
+
+  const updatedModules = state.scanResult.project.modules.map((mod) => {
+    const depIndex = mod.dependencies.findIndex(
+      (d) => d.name === packageName && d.ecosystem === ecosystem,
+    );
+
+    if (depIndex === -1) return mod;
+
+    const dep = mod.dependencies[depIndex]!;
+    const updated = { ...dep, registryMeta };
+    enrichedDep = updated;
+
+    return {
+      ...mod,
+      dependencies: mod.dependencies.map((d, i) =>
+        i === depIndex ? updated : d,
+      ),
+    };
+  });
+
+  state.scanResult = {
+    ...state.scanResult,
+    project: {
+      ...state.scanResult.project,
+      modules: updatedModules,
+    },
+  };
+
+  emitProgress(requestId, 'Enrichment complete', 1);
+
+  if (!enrichedDep) {
+    return createError(
+      requestId,
+      `Dependency ${packageName} not found in any scanned module`,
+      'Ensure the package is a declared dependency in the project',
+    );
+  }
+
+  const response: DependencyEnrichedMessage = {
+    type: 'dependency_enriched',
+    requestId,
+    dependency: enrichedDep,
+  };
+
+  return response;
 }
 
 /**

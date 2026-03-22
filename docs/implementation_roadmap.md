@@ -216,7 +216,7 @@ After each sub-phase:
 
 ---
 
-### Phase 2a: JS/TS Import Analysis + ImportPackageMap (M)
+### Phase 2a: JS/TS Import Analysis + ImportPackageMap (M) [COMPLETE]
 
 **Goal:** AST-parse JS/TS source files to detect which declared deps are actually used.
 
@@ -234,7 +234,7 @@ After each sub-phase:
 
 ---
 
-### Phase 2b: Tree-sitter Import Analysis for Python/Go/Rust/Java (L)
+### Phase 2b: Tree-sitter Import Analysis for Python/Go/Rust/Java (L) [COMPLETE]
 
 **Goal:** Import analysis across all 5 ecosystems via web-tree-sitter (WASM).
 
@@ -254,7 +254,7 @@ After each sub-phase:
 
 ---
 
-### Phase 2c: Registry Enrichment + Outdated Detection (M)
+### Phase 2c: Registry Enrichment + Outdated Detection (M) [COMPLETE]
 
 **Goal:** Query ecosystem registries on-demand for latest versions, licenses, deprecation. Enable outdated detection.
 

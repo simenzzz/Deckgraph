@@ -6,7 +6,11 @@
  */
 
 import type { EcosystemAdapter, ManifestResult, ParsedImport, RegistryMeta } from '@deckgraph/shared';
+import type { RegistryCache } from '../registryCache.js';
+import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { parseJsManifests } from './manifestParser.js';
+import { analyzeJsImports } from './importAnalyzer.js';
+import { queryNpmRegistry } from './registryClient.js';
 
 /**
  * Source file extensions handled by the JS/TS adapter.
@@ -24,12 +28,11 @@ const JS_SOURCE_EXTENSIONS: readonly string[] = [
 
 /**
  * Create a JavaScript/TypeScript ecosystem adapter.
- *
- * Phase 1: parseManifests is fully implemented.
- * Phase 2: analyzeImports will be implemented later.
- * Phase 3: queryRegistry will be implemented later.
  */
-export function createJavaScriptAdapter(): EcosystemAdapter {
+export function createJavaScriptAdapter(
+  cache?: RegistryCache,
+  rateLimiter?: RegistryRateLimiter,
+): EcosystemAdapter {
   return {
     ecosystem: 'npm',
     manifestFiles: ['package.json'],
@@ -39,13 +42,13 @@ export function createJavaScriptAdapter(): EcosystemAdapter {
       return parseJsManifests(projectRoot, modulePath);
     },
 
-    analyzeImports(_filePath: string, _source: string): readonly ParsedImport[] {
-      throw new Error('Import analysis not implemented yet (Phase 2)');
+    async analyzeImports(filePath: string, source: string): Promise<readonly ParsedImport[]> {
+      return analyzeJsImports(filePath, source);
     },
 
-    async queryRegistry(_packageName: string): Promise<RegistryMeta | null> {
-      // Phase 3: will query npm registry API
-      return null;
+    async queryRegistry(packageName: string): Promise<RegistryMeta | null> {
+      if (!cache || !rateLimiter) return null;
+      return queryNpmRegistry(packageName, cache, rateLimiter);
     },
   };
 }
