@@ -11,10 +11,12 @@
     "lint": "turbo run lint",
     "format": "prettier --check .",
     "format:write": "prettier --write .",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "test:e2e": "playwright test --config e2e/playwright.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.10.5",
     "eslint": "^9.18.0",
     "prettier": "^3.4.2",

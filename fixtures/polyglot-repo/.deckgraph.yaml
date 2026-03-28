@@ -1,0 +1,5 @@
+# Deckgraph configuration for polyglot test repo
+ignore-paths:
+  - "**/node_modules/**"
+  - "**/target/**"
+  - "**/__pycache__/**"

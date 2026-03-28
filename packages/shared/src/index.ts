@@ -43,6 +43,17 @@ export type {
 export type { ViewQuery, ViewResult, ModuleView, ViewSummary, OutdatedSeverity } from './types/views.js';
 
 // ============================================================================
+// Types - Actions
+// ============================================================================
+
+export type {
+  PackageAction,
+  PackageActionStatus,
+  PackageActionResult,
+  PackageBatchOperation,
+} from './types/actions.js';
+
+// ============================================================================
 // Types - Messages
 // ============================================================================
 
@@ -53,6 +64,10 @@ export type {
   AnalyzeImportsMessage,
   EnrichDependencyMessage,
   SyncMessage,
+  PackageUpdateMessage,
+  PackageInstallMessage,
+  PackageRemoveMessage,
+  PackageBatchMessage,
   ServerMessage,
   ProjectOverviewMessage,
   ViewResultMessage,
@@ -60,6 +75,9 @@ export type {
   DependencyEnrichedMessage,
   ProgressMessage,
   ErrorMessage,
+  FileChangeDetectedMessage,
+  PackageActionResultMessage,
+  PackageBatchResultMessage,
 } from './types/messages.js';
 
 // ============================================================================
@@ -118,6 +136,21 @@ export {
 } from './schemas/views.js';
 
 // ============================================================================
+// Schemas - Actions
+// ============================================================================
+
+export {
+  packageActionSchema,
+  packageActionStatusSchema,
+  packageActionResultSchema,
+  packageBatchOperationSchema,
+  parsePackageAction,
+  parsePackageActionStatus,
+  parsePackageActionResult,
+  parsePackageBatchOperation,
+} from './schemas/actions.js';
+
+// ============================================================================
 // Analysis
 // ============================================================================
 
@@ -154,4 +187,18 @@ export {
   parseDependencyEnrichedMessage,
   parseProgressMessage,
   parseErrorMessage,
+  fileChangeDetectedMessageSchema,
+  parseFileChangeDetectedMessage,
+  packageUpdateMessageSchema,
+  packageInstallMessageSchema,
+  packageRemoveMessageSchema,
+  packageBatchMessageSchema,
+  packageActionResultMessageSchema,
+  packageBatchResultMessageSchema,
+  parsePackageUpdateMessage,
+  parsePackageInstallMessage,
+  parsePackageRemoveMessage,
+  parsePackageBatchMessage,
+  parsePackageActionResultMessage,
+  parsePackageBatchResultMessage,
 } from './schemas/messages.js';

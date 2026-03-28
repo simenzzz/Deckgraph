@@ -1,0 +1,13 @@
+[package]
+name = "crypto-utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+pyo3 = { version = "0.20", features = ["extension-module"] }
+
+[lib]
+crate-type = ["cdylib", "rlib"]

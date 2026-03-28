@@ -13,6 +13,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('Overview')).toBeInTheDocument();
     expect(screen.getByText('Module Explorer')).toBeInTheDocument();
     expect(screen.getByText('Health Report')).toBeInTheDocument();
+    expect(screen.getByText('Cross-Language')).toBeInTheDocument();
   });
 
   it('highlights active view', () => {
@@ -31,5 +32,11 @@ describe('Sidebar', () => {
     render(<Sidebar />);
     fireEvent.click(screen.getByTestId('nav-health'));
     expect(useViewStore.getState().currentView).toBe('health');
+  });
+
+  it('switches to graph view on click', () => {
+    render(<Sidebar />);
+    fireEvent.click(screen.getByTestId('nav-graph'));
+    expect(useViewStore.getState().currentView).toBe('graph');
   });
 });

@@ -43,13 +43,13 @@ describe('DependencyList', () => {
   });
 
   it('shows prompt when no module selected', () => {
-    render(<DependencyList />);
+    render(<DependencyList wsClient={null} />);
     expect(screen.getByText(/Select a module/)).toBeInTheDocument();
   });
 
   it('renders dependencies for selected module', () => {
     useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
-    render(<DependencyList />);
+    render(<DependencyList wsClient={null} />);
 
     expect(screen.getByText('react')).toBeInTheDocument();
     expect(screen.getByText('vitest')).toBeInTheDocument();
@@ -58,21 +58,21 @@ describe('DependencyList', () => {
 
   it('shows module name and dep count', () => {
     useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
-    render(<DependencyList />);
+    render(<DependencyList wsClient={null} />);
     expect(screen.getByText('app')).toBeInTheDocument();
     expect(screen.getByText('2 deps')).toBeInTheDocument();
   });
 
   it('shows scope badges', () => {
     useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
-    render(<DependencyList />);
+    render(<DependencyList wsClient={null} />);
     expect(screen.getByText('runtime')).toBeInTheDocument();
     expect(screen.getByText('dev')).toBeInTheDocument();
   });
 
   it('clicking dep name sets detailStore selection', () => {
     useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
-    render(<DependencyList />);
+    render(<DependencyList wsClient={null} />);
 
     fireEvent.click(screen.getByTestId('dep-link-react'));
     const state = useDetailStore.getState();
@@ -81,7 +81,7 @@ describe('DependencyList', () => {
 
   it('dep names are rendered as clickable links', () => {
     useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
-    render(<DependencyList />);
+    render(<DependencyList wsClient={null} />);
 
     expect(screen.getByTestId('dep-link-react')).toBeInTheDocument();
     expect(screen.getByTestId('dep-link-vitest')).toBeInTheDocument();

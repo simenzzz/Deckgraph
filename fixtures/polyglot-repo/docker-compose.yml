@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  api-gateway:
+    build: ./services/api-gateway
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth-service
+      - payment-processor
+  auth-service:
+    build: ./services/auth-service
+    ports:
+      - "8000:8000"
+  payment-processor:
+    build: ./services/payment-processor
+    ports:
+      - "8080:8080"
+  ml-pipeline:
+    build: ./services/ml-pipeline
+    ports:
+      - "9000:9000"

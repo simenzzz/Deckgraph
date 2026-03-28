@@ -75,4 +75,9 @@ describe('viewStore', () => {
     useViewStore.getState().setView('health');
     expect(useViewStore.getState().currentView).toBe('health');
   });
+
+  it('setView accepts graph view', () => {
+    useViewStore.getState().setView('graph');
+    expect(useViewStore.getState().currentView).toBe('graph');
+  });
 });

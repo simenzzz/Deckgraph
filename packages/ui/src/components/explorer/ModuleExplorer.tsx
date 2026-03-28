@@ -40,7 +40,7 @@ export function ModuleExplorer({ wsClient }: ModuleExplorerProps) {
           {selectedDep ? (
             <DependencyDetail wsClient={wsClient} />
           ) : (
-            <DependencyList />
+            <DependencyList wsClient={wsClient} />
           )}
         </div>
       </div>

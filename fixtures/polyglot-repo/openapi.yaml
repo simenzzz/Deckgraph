@@ -1,0 +1,29 @@
+openapi: "3.0.3"
+info:
+  title: Polyglot API
+  version: "1.0.0"
+paths:
+  /auth/login:
+    post:
+      operationId: loginUser
+      summary: Authenticate user
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: Login successful
+  /payments/process:
+    post:
+      operationId: processPayment
+      summary: Process a payment
+      responses:
+        "200":
+          description: Payment processed

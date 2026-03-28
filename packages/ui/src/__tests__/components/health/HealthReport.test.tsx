@@ -20,13 +20,13 @@ describe('HealthReport', () => {
   });
 
   it('renders health report container', () => {
-    render(<HealthReport />);
+    render(<HealthReport wsClient={null} />);
     expect(screen.getByTestId('health-report')).toBeInTheDocument();
     expect(screen.getByText('Health Report')).toBeInTheDocument();
   });
 
   it('renders all three tabs', () => {
-    render(<HealthReport />);
+    render(<HealthReport wsClient={null} />);
     expect(screen.getByTestId('tab-outdated')).toBeInTheDocument();
     expect(screen.getByTestId('tab-unused')).toBeInTheDocument();
     expect(screen.getByTestId('tab-licenses')).toBeInTheDocument();
@@ -34,7 +34,7 @@ describe('HealthReport', () => {
 
   it('shows outdated tab by default', () => {
     useProjectStore.getState().setProject(emptyProject);
-    render(<HealthReport />);
+    render(<HealthReport wsClient={null} />);
     // Default tab is outdated, which shows "no registry data" message
     expect(screen.getByTestId('outdated-no-data')).toBeInTheDocument();
   });
@@ -75,7 +75,7 @@ describe('HealthReport', () => {
       ],
     };
     useProjectStore.getState().setProject(project);
-    render(<HealthReport />);
+    render(<HealthReport wsClient={null} />);
     expect(screen.getByTestId('tab-outdated').textContent).toContain('1');
   });
 });

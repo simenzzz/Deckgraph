@@ -6,13 +6,21 @@ import { useState, useMemo } from 'react';
 import type { Dependency, ModuleView } from '@deckgraph/shared';
 import { useViewStore, useDetailStore } from '@/stores';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 import { ScopeBadge } from './ScopeBadge';
 import { ConcernBadge } from './ConcernBadge';
+import { DependencyActions } from './DependencyActions';
+import { InstallDialog } from './InstallDialog';
+import type { WsClient } from '@/lib/wsClient';
 
 type SortField = 'name' | 'version' | 'scope';
 type SortDir = 'asc' | 'desc';
 
-export function DependencyList() {
+interface DependencyListProps {
+  readonly wsClient: WsClient | null;
+}
+
+export function DependencyList({ wsClient }: DependencyListProps) {
   const result = useViewStore((s) => s.result);
   const selectedModulePath = useViewStore((s) => s.selectedModulePath);
 
@@ -50,6 +58,8 @@ export function DependencyList() {
     }
   };
 
+  const [installDialogOpen, setInstallDialogOpen] = useState(false);
+
   if (!selectedModule) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
@@ -75,6 +85,14 @@ export function DependencyList() {
             {deps.length} dep{deps.length !== 1 ? 's' : ''}
           </span>
         </h3>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setInstallDialogOpen(true)}
+          data-testid="install-package-button"
+        >
+          Install Package
+        </Button>
       </div>
       <Table>
         <TableHeader>
@@ -90,19 +108,42 @@ export function DependencyList() {
               Scope
             </SortableHead>
             <TableHead>Concerns</TableHead>
+            <TableHead>Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {sorted.map((dep) => (
-            <DepRow key={`${dep.name}-${dep.ecosystem}`} dep={dep} />
+            <DepRow
+              key={`${dep.name}-${dep.ecosystem}`}
+              dep={dep}
+              modulePath={selectedModule.path}
+              wsClient={wsClient}
+            />
           ))}
         </TableBody>
       </Table>
+
+      <InstallDialog
+        open={installDialogOpen}
+        onOpenChange={setInstallDialogOpen}
+        modulePath={selectedModule.path}
+        moduleName={selectedModule.name}
+        moduleEcosystem={selectedModule.ecosystem}
+        wsClient={wsClient}
+      />
     </div>
   );
 }
 
-function DepRow({ dep }: { readonly dep: Dependency }) {
+function DepRow({
+  dep,
+  modulePath,
+  wsClient,
+}: {
+  readonly dep: Dependency;
+  readonly modulePath: string;
+  readonly wsClient: WsClient | null;
+}) {
   const selectDep = useDetailStore((s) => s.selectDep);
 
   return (
@@ -127,6 +168,9 @@ function DepRow({ dep }: { readonly dep: Dependency }) {
             <ConcernBadge key={c} concern={c} />
           ))}
         </div>
+      </TableCell>
+      <TableCell>
+        <DependencyActions dep={dep} modulePath={modulePath} wsClient={wsClient} />
       </TableCell>
     </TableRow>
   );

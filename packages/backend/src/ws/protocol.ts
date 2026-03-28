@@ -13,12 +13,21 @@ import type {
   ViewResultMessage,
   ModuleUpdatedMessage,
   DependencyEnrichedMessage,
+  PackageActionResultMessage,
+  PackageBatchResultMessage,
   ErrorMessage,
   Ecosystem,
+  DependencyScope,
   ViewQuery,
+  PackageBatchOperation,
 } from '@deckgraph/shared';
 import { clientMessageSchema } from '@deckgraph/shared';
+import { updatePackage, installPackage, removePackage } from '../actions/packageManager.js';
+import { executeBatch } from '../actions/batchExecutor.js';
+import { isReasonablePackageName } from '../actions/validators.js';
 import { scanProject } from '../scanner/scanner.js';
+import { incrementalScan } from '../scanner/incrementalScanner.js';
+import type { FileChangeEvent } from '../watcher/fileWatcher.js';
 import { executeQuery } from '../graph/queryEngine.js';
 import { resolveImports } from '../analysis/importResolver.js';
 import { addModule } from '../graph/dependencyGraph.js';
@@ -33,6 +42,10 @@ const VALID_TYPES = [
   'sync',
   'analyze_imports',
   'enrich_dependency',
+  'package_update',
+  'package_install',
+  'package_remove',
+  'package_batch',
 ] as const;
 
 /**
@@ -115,6 +128,47 @@ async function dispatch(
           message.requestId,
           message.ecosystem,
           message.packageName,
+          state,
+          emitProgress,
+        );
+
+      case 'package_update':
+        return await handlePackageUpdate(
+          message.requestId,
+          message.ecosystem,
+          message.packageName,
+          message.modulePath,
+          message.targetVersion,
+          state,
+          emitProgress,
+        );
+
+      case 'package_install':
+        return await handlePackageInstall(
+          message.requestId,
+          message.ecosystem,
+          message.packageName,
+          message.modulePath,
+          message.version,
+          message.scope,
+          state,
+          emitProgress,
+        );
+
+      case 'package_remove':
+        return await handlePackageRemove(
+          message.requestId,
+          message.ecosystem,
+          message.packageName,
+          message.modulePath,
+          state,
+          emitProgress,
+        );
+
+      case 'package_batch':
+        return await handlePackageBatch(
+          message.requestId,
+          message.operations,
           state,
           emitProgress,
         );
@@ -319,6 +373,14 @@ async function handleEnrichDependency(
     );
   }
 
+  if (!isReasonablePackageName(packageName)) {
+    return createError(
+      requestId,
+      `Invalid package name: "${packageName}"`,
+      'Package names may only contain alphanumeric characters, dots, hyphens, underscores, slashes, @, and colons',
+    );
+  }
+
   const adapter = state.registry.getAdapterForEcosystem(ecosystem);
   if (!adapter) {
     return createError(
@@ -387,6 +449,283 @@ async function handleEnrichDependency(
   };
 
   return response;
+}
+
+/**
+ * Handle package_update: update a dependency to a specific version.
+ */
+async function handlePackageUpdate(
+  requestId: string,
+  _ecosystem: Ecosystem,
+  packageName: string,
+  modulePath: string,
+  targetVersion: string,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.scanResult) {
+    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+  }
+
+  const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
+  if (!module) {
+    return createError(requestId, `Module not found: ${modulePath}`, 'Check the module path');
+  }
+
+  // Check per-module lock
+  const existingLock = state.moduleActionLocks.get(modulePath);
+  if (existingLock) {
+    return createError(
+      requestId,
+      `A package operation is already in progress on "${module.name}"`,
+      'Wait for the current operation to complete',
+    );
+  }
+
+  state.moduleActionLocks.set(modulePath, requestId);
+  try {
+    emitProgress(requestId, `Updating ${packageName} to ${targetVersion}...`, 0);
+
+    const result = await updatePackage(
+      { executorRegistry: state.executorRegistry, projectRoot: state.projectRoot },
+      module,
+      packageName,
+      targetVersion,
+    );
+
+    if (result.status === 'success') {
+      emitProgress(requestId, 'Re-scanning module...', 1);
+      const event = buildModuleChangeEvent(module);
+      const freshScan = await incrementalScan({
+        projectRoot: state.projectRoot,
+        previousResult: state.scanResult,
+        event,
+      });
+      state.scanResult = freshScan;
+    }
+
+    emitProgress(requestId, result.status === 'success' ? 'Update complete' : 'Update failed', 2);
+
+    const response: PackageActionResultMessage = {
+      type: 'package_action_result',
+      requestId,
+      result,
+    };
+    return response;
+  } finally {
+    state.moduleActionLocks.delete(modulePath);
+  }
+}
+
+/**
+ * Handle package_install: install a new dependency.
+ */
+async function handlePackageInstall(
+  requestId: string,
+  ecosystem: Ecosystem,
+  packageName: string,
+  modulePath: string,
+  version: string | null,
+  scope: DependencyScope,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.scanResult) {
+    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+  }
+
+  const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
+  if (!module) {
+    return createError(requestId, `Module not found: ${modulePath}`, 'Check the module path');
+  }
+
+  const existingLock = state.moduleActionLocks.get(modulePath);
+  if (existingLock) {
+    return createError(
+      requestId,
+      `A package operation is already in progress on "${module.name}"`,
+      'Wait for the current operation to complete',
+    );
+  }
+
+  state.moduleActionLocks.set(modulePath, requestId);
+  try {
+    emitProgress(requestId, `Installing ${packageName}...`, 0);
+
+    const result = await installPackage(
+      { executorRegistry: state.executorRegistry, projectRoot: state.projectRoot },
+      module,
+      packageName,
+      ecosystem,
+      version,
+      scope,
+    );
+
+    if (result.status === 'success') {
+      emitProgress(requestId, 'Re-scanning module...', 1);
+      const event = buildModuleChangeEvent(module);
+      const freshScan = await incrementalScan({
+        projectRoot: state.projectRoot,
+        previousResult: state.scanResult,
+        event,
+      });
+      state.scanResult = freshScan;
+    }
+
+    emitProgress(requestId, result.status === 'success' ? 'Install complete' : 'Install failed', 2);
+
+    const response: PackageActionResultMessage = {
+      type: 'package_action_result',
+      requestId,
+      result,
+    };
+    return response;
+  } finally {
+    state.moduleActionLocks.delete(modulePath);
+  }
+}
+
+/**
+ * Handle package_remove: remove a dependency.
+ */
+async function handlePackageRemove(
+  requestId: string,
+  _ecosystem: Ecosystem,
+  packageName: string,
+  modulePath: string,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.scanResult) {
+    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+  }
+
+  const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
+  if (!module) {
+    return createError(requestId, `Module not found: ${modulePath}`, 'Check the module path');
+  }
+
+  const existingLock = state.moduleActionLocks.get(modulePath);
+  if (existingLock) {
+    return createError(
+      requestId,
+      `A package operation is already in progress on "${module.name}"`,
+      'Wait for the current operation to complete',
+    );
+  }
+
+  state.moduleActionLocks.set(modulePath, requestId);
+  try {
+    emitProgress(requestId, `Removing ${packageName}...`, 0);
+
+    const result = await removePackage(
+      { executorRegistry: state.executorRegistry, projectRoot: state.projectRoot },
+      module,
+      packageName,
+    );
+
+    if (result.status === 'success') {
+      emitProgress(requestId, 'Re-scanning module...', 1);
+      const event = buildModuleChangeEvent(module);
+      const freshScan = await incrementalScan({
+        projectRoot: state.projectRoot,
+        previousResult: state.scanResult,
+        event,
+      });
+      state.scanResult = freshScan;
+    }
+
+    emitProgress(requestId, result.status === 'success' ? 'Remove complete' : 'Remove failed', 2);
+
+    const response: PackageActionResultMessage = {
+      type: 'package_action_result',
+      requestId,
+      result,
+    };
+    return response;
+  } finally {
+    state.moduleActionLocks.delete(modulePath);
+  }
+}
+
+/**
+ * Handle package_batch: execute a batch of package operations sequentially.
+ */
+async function handlePackageBatch(
+  requestId: string,
+  operations: readonly PackageBatchOperation[],
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.scanResult) {
+    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+  }
+
+  // Pre-validate all package names before starting the batch
+  for (const op of operations) {
+    if (!isReasonablePackageName(op.packageName)) {
+      return createError(
+        requestId,
+        `Invalid package name in batch: "${op.packageName}"`,
+        'Package names may only contain alphanumeric characters, dots, hyphens, underscores, slashes, @, and colons',
+      );
+    }
+  }
+
+  const pmDeps = { executorRegistry: state.executorRegistry, projectRoot: state.projectRoot };
+
+  const batchResult = await executeBatch(
+    pmDeps,
+    operations,
+    {
+      findModule: (modulePath) =>
+        state.scanResult?.project.modules.find((m) => m.path === modulePath),
+      moduleActionLocks: state.moduleActionLocks,
+      postActionScan: async (module) => {
+        const event = buildModuleChangeEvent(module);
+        const freshScan = await incrementalScan({
+          projectRoot: state.projectRoot,
+          previousResult: state.scanResult!,
+          event,
+        });
+        state.scanResult = freshScan;
+      },
+    },
+    emitProgress,
+    requestId,
+  );
+
+  emitProgress(
+    requestId,
+    batchResult.stoppedEarly
+      ? `Batch stopped early: ${batchResult.completedCount}/${batchResult.totalCount} completed`
+      : `Batch complete: ${batchResult.completedCount} operations`,
+    2,
+  );
+
+  const response: PackageBatchResultMessage = {
+    type: 'package_batch_result',
+    requestId,
+    results: batchResult.results,
+    completedCount: batchResult.completedCount,
+    totalCount: batchResult.totalCount,
+    stoppedEarly: batchResult.stoppedEarly,
+  };
+
+  return response;
+}
+
+/**
+ * Build a FileChangeEvent for incremental re-scan after a package action.
+ * Targets only the affected module's manifests.
+ */
+function buildModuleChangeEvent(module: { readonly path: string; readonly manifests: readonly string[] }): FileChangeEvent {
+  return {
+    changedFiles: module.manifests.map((m) => `${module.path}/${m}`),
+    addedFiles: [],
+    removedFiles: [],
+    affectedModules: [module.path],
+  };
 }
 
 /**

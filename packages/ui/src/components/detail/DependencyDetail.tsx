@@ -7,7 +7,9 @@
 
 import { useDetailStore } from '@/stores/detailStore';
 import { useDependencyDetail } from '@/hooks/useDependencyDetail';
+import { usePackageUpdate } from '@/hooks/usePackageAction';
 import { RegistryInfo } from './RegistryInfo';
+import { UpdateButton } from './UpdateButton';
 import { UsageList } from './UsageList';
 import { TransitiveDeps } from './TransitiveDeps';
 import { OutdatedBadge } from './OutdatedBadge';
@@ -23,8 +25,9 @@ interface DependencyDetailProps {
 
 export function DependencyDetail({ wsClient }: DependencyDetailProps) {
   const closeDep = useDetailStore((s) => s.closeDep);
-  const { dependency, analysisState, outdatedSeverity, isEnriching, requestEnrichment } =
+  const { dependency, modulePath, analysisState, outdatedSeverity, isEnriching, requestEnrichment } =
     useDependencyDetail(wsClient);
+  const updateAction = usePackageUpdate(dependency, modulePath, wsClient);
 
   if (!dependency) {
     return (
@@ -59,6 +62,16 @@ export function DependencyDetail({ wsClient }: DependencyDetailProps) {
             isEnriching={isEnriching}
             onEnrich={requestEnrichment}
           />
+          {modulePath && (
+            <div className="mt-2">
+              <UpdateButton
+                dependency={dependency}
+                outdatedSeverity={outdatedSeverity}
+                modulePath={modulePath}
+                updateAction={updateAction}
+              />
+            </div>
+          )}
         </section>
 
         <section>

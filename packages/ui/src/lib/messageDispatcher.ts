@@ -3,6 +3,7 @@
  */
 
 import type { ServerMessage } from '@deckgraph/shared';
+import { useActionStore } from '@/stores/actionStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useDetailStore } from '@/stores/detailStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -38,6 +39,18 @@ export function dispatchServerMessage(message: ServerMessage): void {
     case 'dependency_enriched':
       useProjectStore.getState().updateDependency(message.dependency);
       useDetailStore.getState().setEnriching(false);
+      break;
+
+    case 'file_change_detected':
+      useProjectStore.getState().setFileChangeInProgress(true);
+      break;
+
+    case 'package_action_result':
+      useActionStore.getState().completeAction(message.result);
+      break;
+
+    case 'package_batch_result':
+      useActionStore.getState().batchComplete(message.results);
       break;
 
     default: {

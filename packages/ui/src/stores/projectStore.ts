@@ -10,6 +10,7 @@ export interface ProjectState {
   readonly project: Project | null;
   readonly isScanning: boolean;
   readonly lastProgress: ProgressMessage | null;
+  readonly fileChangeInProgress: boolean;
 }
 
 export interface ProjectActions {
@@ -18,6 +19,7 @@ export interface ProjectActions {
   setProgress: (progress: ProgressMessage) => void;
   updateModule: (updated: Module) => void;
   updateDependency: (updated: Dependency) => void;
+  setFileChangeInProgress: (inProgress: boolean) => void;
   clear: () => void;
 }
 
@@ -27,9 +29,10 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   project: null,
   isScanning: false,
   lastProgress: null,
+  fileChangeInProgress: false,
 
   setProject: (project) =>
-    set(() => ({ project, isScanning: false, lastProgress: null })),
+    set(() => ({ project, isScanning: false, lastProgress: null, fileChangeInProgress: false })),
 
   setScanning: (isScanning) =>
     set((state) => ({ ...state, isScanning })),
@@ -74,6 +77,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       };
     }),
 
+  setFileChangeInProgress: (inProgress) =>
+    set((state) => ({ ...state, fileChangeInProgress: inProgress })),
+
   clear: () =>
-    set(() => ({ project: null, isScanning: false, lastProgress: null })),
+    set(() => ({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false })),
 }));

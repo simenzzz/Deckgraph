@@ -5,7 +5,8 @@
  * and the Node.js backend over WebSocket.
  */
 
-import type { Dependency, Ecosystem, Module, Project } from './project.js';
+import type { PackageActionResult, PackageBatchOperation } from './actions.js';
+import type { Dependency, DependencyScope, Ecosystem, Module, Project } from './project.js';
 import type { ViewQuery, ViewResult } from './views.js';
 
 // ============================================================================
@@ -20,7 +21,11 @@ export type ClientMessage =
   | ViewQueryMessage
   | AnalyzeImportsMessage
   | EnrichDependencyMessage
-  | SyncMessage;
+  | SyncMessage
+  | PackageUpdateMessage
+  | PackageInstallMessage
+  | PackageRemoveMessage
+  | PackageBatchMessage;
 
 /**
  * Request a full project scan.
@@ -66,6 +71,52 @@ export interface SyncMessage {
   readonly requestId: string;
 }
 
+/**
+ * Request to update a dependency to a specific version.
+ */
+export interface PackageUpdateMessage {
+  readonly type: 'package_update';
+  readonly requestId: string;
+  readonly ecosystem: Ecosystem;
+  readonly packageName: string;
+  readonly modulePath: string;
+  readonly targetVersion: string;
+}
+
+/**
+ * Request to install a new dependency.
+ */
+export interface PackageInstallMessage {
+  readonly type: 'package_install';
+  readonly requestId: string;
+  readonly ecosystem: Ecosystem;
+  readonly packageName: string;
+  readonly modulePath: string;
+  /** null = latest version */
+  readonly version: string | null;
+  readonly scope: DependencyScope;
+}
+
+/**
+ * Request to remove a dependency.
+ */
+export interface PackageRemoveMessage {
+  readonly type: 'package_remove';
+  readonly requestId: string;
+  readonly ecosystem: Ecosystem;
+  readonly packageName: string;
+  readonly modulePath: string;
+}
+
+/**
+ * Request to execute multiple package operations as a batch.
+ */
+export interface PackageBatchMessage {
+  readonly type: 'package_batch';
+  readonly requestId: string;
+  readonly operations: readonly PackageBatchOperation[];
+}
+
 // ============================================================================
 // Server Messages (Backend → UI)
 // ============================================================================
@@ -79,7 +130,10 @@ export type ServerMessage =
   | ModuleUpdatedMessage
   | DependencyEnrichedMessage
   | ProgressMessage
-  | ErrorMessage;
+  | ErrorMessage
+  | FileChangeDetectedMessage
+  | PackageActionResultMessage
+  | PackageBatchResultMessage;
 
 /**
  * Full project overview after scan completion.
@@ -135,4 +189,37 @@ export interface ErrorMessage {
   readonly requestId: string;
   readonly message: string;
   readonly suggestion: string;
+}
+
+/**
+ * Server-initiated notification that files have changed on disk.
+ * Sent before the incremental re-scan begins.
+ */
+export interface FileChangeDetectedMessage {
+  readonly type: 'file_change_detected';
+  readonly requestId: string;
+  readonly affectedModules: readonly string[];
+  readonly timestamp: string;
+}
+
+/**
+ * Result of a single package management action (update/install/remove).
+ */
+export interface PackageActionResultMessage {
+  readonly type: 'package_action_result';
+  readonly requestId: string;
+  readonly result: PackageActionResult;
+}
+
+/**
+ * Result of a batch package management operation.
+ */
+export interface PackageBatchResultMessage {
+  readonly type: 'package_batch_result';
+  readonly requestId: string;
+  readonly results: readonly PackageActionResult[];
+  readonly completedCount: number;
+  readonly totalCount: number;
+  /** true if execution stopped early due to a per-module failure */
+  readonly stoppedEarly: boolean;
 }

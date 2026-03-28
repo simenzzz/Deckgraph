@@ -1,0 +1,10 @@
+[project]
+name = "auth-service"
+version = "1.0.0"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+    "pyjwt>=2.8.0",
+    "bcrypt>=4.1.0",
+    "redis>=5.0.0",
+]

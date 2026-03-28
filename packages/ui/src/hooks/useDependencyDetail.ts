@@ -15,6 +15,7 @@ import { createRequestId } from '@/lib/wsClient';
 
 export interface DependencyDetailData {
   readonly dependency: Dependency | null;
+  readonly modulePath: string | null;
   readonly analysisState: AnalysisState | null;
   readonly outdatedSeverity: OutdatedSeverity | null;
   readonly isEnriching: boolean;
@@ -28,16 +29,16 @@ export function useDependencyDetail(wsClient: WsClient | null): DependencyDetail
   const enrichedRef = useRef<string | null>(null);
 
   const resolved = useMemo(() => {
-    if (!selectedDep || !project) return { dependency: null, analysisState: null };
+    if (!selectedDep || !project) return { dependency: null, modulePath: null, analysisState: null };
 
     for (const mod of project.modules) {
       for (const dep of mod.dependencies) {
         if (dep.name === selectedDep.name && dep.ecosystem === selectedDep.ecosystem) {
-          return { dependency: dep, analysisState: mod.analysisState };
+          return { dependency: dep, modulePath: mod.path, analysisState: mod.analysisState };
         }
       }
     }
-    return { dependency: null, analysisState: null };
+    return { dependency: null, modulePath: null, analysisState: null };
   }, [selectedDep, project]);
 
   const depVersion = resolved.dependency?.version;
@@ -79,6 +80,7 @@ export function useDependencyDetail(wsClient: WsClient | null): DependencyDetail
 
   return {
     dependency: resolved.dependency,
+    modulePath: resolved.modulePath,
     analysisState: resolved.analysisState,
     outdatedSeverity,
     isEnriching,

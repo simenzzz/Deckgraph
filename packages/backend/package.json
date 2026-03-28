@@ -27,7 +27,9 @@
   "dependencies": {
     "@babel/parser": "^7.29.2",
     "@deckgraph/shared": "workspace:*",
+    "chokidar": "^5.0.0",
     "commander": "^13.1.0",
+    "execa": "^9.6.1",
     "fast-glob": "^3.3.3",
     "fast-xml-parser": "^4.5.1",
     "fuse.js": "^7.1.0",
@@ -43,6 +45,7 @@
     "tree-sitter-rust": "^0.24.0",
     "web-tree-sitter": "^0.26.7",
     "ws": "^8.18.0",
+    "xxhash-wasm": "^1.1.0",
     "zod": "^3.24.1"
   }
 }

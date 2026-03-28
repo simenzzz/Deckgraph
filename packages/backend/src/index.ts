@@ -6,6 +6,7 @@
  *   npx deckgraph --project <path>            # Start WS server and scan project
  *   npx deckgraph --project <path> --port 4000 # Custom port
  *   npx deckgraph --project <path> --no-open   # Skip opening browser
+ *   npx deckgraph --project <path> --no-watch  # Disable file watching
  *   npx deckgraph --version                    # Print version
  */
 
@@ -49,7 +50,8 @@ export function createProgram(): Command {
     .version(getVersion())
     .requiredOption('--project <path>', 'Path to the project root')
     .option('--port <number>', 'WebSocket server port', '3333')
-    .option('--no-open', 'Skip opening browser');
+    .option('--no-open', 'Skip opening browser')
+    .option('--no-watch', 'Disable file watching');
 
   return program;
 }
@@ -66,6 +68,7 @@ export async function main(argv?: readonly string[]): Promise<void> {
     project: string;
     port: string;
     open: boolean;
+    watch: boolean;
   }>();
 
   const projectRoot = resolve(opts.project);
@@ -88,7 +91,7 @@ export async function main(argv?: readonly string[]): Promise<void> {
   }
 
   const uiDistPath = resolve(__dirname, '../../ui/dist');
-  const server = createServer({ port, projectRoot, uiDistPath });
+  const server = createServer({ port, projectRoot, uiDistPath, noWatch: !opts.watch });
 
   const shutdown = async (): Promise<void> => {
     logger.info('Shutting down...');

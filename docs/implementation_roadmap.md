@@ -276,7 +276,7 @@ After each sub-phase:
 
 ---
 
-### Phase 2d: Dependency Detail View + Health Report UI (M-L)
+### Phase 2d: Dependency Detail View + Health Report UI (M-L) [COMPLETE]
 
 **Goal:** Deep-dive UI views leveraging import analysis and registry data.
 
@@ -293,19 +293,24 @@ After each sub-phase:
 
 ---
 
-### Phase 2e: Visual Dependency Graph + File Watcher (L)
+### Phase 2e: Visual Dependency Graph + File Watcher (L) [COMPLETE]
 
 **Goal:** Add visual graph view and enable incremental file watching. (All 5 cross-language detectors were completed in Phase 1g.)
 
 **What to build:**
 - `packages/backend/src/watcher/fileWatcher.ts` — chokidar, debounced (300ms), only watch manifest + source files
 - `packages/backend/src/watcher/contentHasher.ts` — xxhash wrapper, immutable Map<path, hash>
+- `packages/backend/src/scanner/incrementalScanner.ts` — Re-scan only affected modules after file changes
 - `packages/ui/src/components/crosslang/` — CrossLanguageGraph.tsx (dagre + SVG), EdgeList.tsx, EdgeDetail.tsx, CrossEdgeFilter.tsx
+- `packages/ui/src/stores/graphStore.ts` — Zustand store for graph layout state
+- `packages/ui/src/lib/graphLayout.ts` — dagre layout computation
+- `fixtures/polyglot-repo/` — 7-module test fixture across 5 ecosystems
+- `e2e/` — Playwright E2E tests (scan, explorer, health, graph views)
 - Route: `/cross-language`
 
-**Key packages:** `dagre`, `xxhash-wasm`, `chokidar`
+**Key packages:** `dagre`, `xxhash-wasm`, `chokidar`, `@playwright/test`
 
-**Tests:** Hash comparison, analysisState invalidation, graph renders nodes/edges
+**Tests:** Hash comparison, analysisState invalidation, graph renders nodes/edges, incremental scanner, Playwright E2E (12 tests)
 
 **Demo:** Visual graph with ecosystem-colored nodes. Toggle edge types. Slide confidence threshold. Edit file → auto re-analysis in UI
 
@@ -331,7 +336,7 @@ Note: 2c doesn't strictly need 2b (only needs 2a's WS changes). Can parallelize 
 
 ---
 
-### Phase 3a: Package Update from UI (M-L)
+### Phase 3a: Package Update from UI (M-L) [COMPLETE]
 
 **Goal:** Update a single dependency to a specific version with confirmation and rollback.
 
@@ -351,7 +356,7 @@ Note: 2c doesn't strictly need 2b (only needs 2a's WS changes). Can parallelize 
 
 ---
 
-### Phase 3b: Install + Remove + Batch Operations (M)
+### Phase 3b: Install + Remove + Batch Operations (M) [COMPLETE]
 
 **Goal:** Complete package management plus batch operations from Health Report.
 

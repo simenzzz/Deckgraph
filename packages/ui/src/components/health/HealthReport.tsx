@@ -1,6 +1,7 @@
 /**
  * Health Report view.
  * Tabbed interface showing Outdated, Unused, and License Audit reports.
+ * Includes batch action buttons for bulk update/remove operations.
  */
 
 import { useHealthReport } from '@/hooks/useHealthReport';
@@ -8,14 +9,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { OutdatedReport } from './OutdatedReport';
 import { UnusedReport } from './UnusedReport';
 import { LicenseAudit } from './LicenseAudit';
+import { BatchActions } from './BatchActions';
+import type { WsClient } from '@/lib/wsClient';
 
-export function HealthReport() {
+interface HealthReportProps {
+  readonly wsClient: WsClient | null;
+}
+
+export function HealthReport({ wsClient }: HealthReportProps) {
   const { outdatedDeps, unusedDeps, licenseDistribution, hasImportAnalysis, hasRegistryData } =
     useHealthReport();
 
   return (
     <div className="space-y-4" data-testid="health-report">
-      <h2 className="text-xl font-semibold">Health Report</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Health Report</h2>
+        <BatchActions
+          outdatedDeps={outdatedDeps}
+          unusedDeps={unusedDeps}
+          wsClient={wsClient}
+        />
+      </div>
       <Tabs defaultValue="outdated">
         <TabsList>
           <TabsTrigger value="outdated" data-testid="tab-outdated">

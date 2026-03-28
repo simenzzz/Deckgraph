@@ -3,8 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import type { ServerMessage, Project, ViewResult, Module } from '@deckgraph/shared';
+import type { ServerMessage, Project, ViewResult, Module, PackageActionResult } from '@deckgraph/shared';
 import { dispatchServerMessage } from '@/lib/messageDispatcher';
+import { useActionStore } from '@/stores/actionStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useDetailStore } from '@/stores/detailStore';
 import { useProjectStore } from '@/stores/projectStore';
@@ -35,7 +36,7 @@ const mockViewResult: ViewResult = {
 describe('dispatchServerMessage', () => {
   beforeEach(() => {
     useConnectionStore.setState({ status: 'connected', lastError: null });
-    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
+    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false });
     useViewStore.setState({ result: null, isLoading: false, selectedModulePath: null, currentView: 'overview' });
   });
 
@@ -184,5 +185,87 @@ describe('dispatchServerMessage', () => {
 
     // Check detailStore enriching was cleared
     expect(useDetailStore.getState().isEnriching).toBe(false);
+  });
+
+  it('dispatches file_change_detected to projectStore', () => {
+    const msg: ServerMessage = {
+      type: 'file_change_detected',
+      requestId: 'r1',
+      affectedModules: ['pkg/a'],
+      timestamp: '2024-01-01T00:00:00.000Z',
+    };
+
+    dispatchServerMessage(msg);
+    expect(useProjectStore.getState().fileChangeInProgress).toBe(true);
+  });
+
+  it('project_overview clears fileChangeInProgress', () => {
+    useProjectStore.setState({ fileChangeInProgress: true });
+
+    const msg: ServerMessage = {
+      type: 'project_overview',
+      requestId: 'r1',
+      data: mockProject,
+    };
+
+    dispatchServerMessage(msg);
+    expect(useProjectStore.getState().fileChangeInProgress).toBe(false);
+  });
+
+  it('dispatches package_action_result to actionStore', () => {
+    useActionStore.getState().startAction('packages/app', 'req-1');
+
+    const result: PackageActionResult = {
+      action: 'update',
+      ecosystem: 'npm',
+      packageName: 'react',
+      modulePath: 'packages/app',
+      status: 'success',
+      previousVersion: '18.0.0',
+      newVersion: '19.0.0',
+      error: null,
+      command: 'pnpm add react@19.0.0',
+    };
+
+    const msg: ServerMessage = {
+      type: 'package_action_result',
+      requestId: 'req-1',
+      result,
+    };
+
+    dispatchServerMessage(msg);
+    expect(useActionStore.getState().lastResult).toEqual(result);
+    expect(useActionStore.getState().inProgress.has('packages/app')).toBe(false);
+  });
+
+  it('dispatches package_batch_result to actionStore', () => {
+    useActionStore.getState().startBatch();
+
+    const results: PackageActionResult[] = [
+      {
+        action: 'update',
+        ecosystem: 'npm',
+        packageName: 'react',
+        modulePath: 'packages/app',
+        status: 'success',
+        previousVersion: '18.0.0',
+        newVersion: '19.0.0',
+        error: null,
+        command: 'pnpm add react@19.0.0',
+      },
+    ];
+
+    const msg: ServerMessage = {
+      type: 'package_batch_result',
+      requestId: 'req-1',
+      results,
+      completedCount: 1,
+      totalCount: 1,
+      stoppedEarly: false,
+    };
+
+    dispatchServerMessage(msg);
+    expect(useActionStore.getState().isBatchRunning).toBe(false);
+    expect(useActionStore.getState().batchResults).toHaveLength(1);
   });
 });

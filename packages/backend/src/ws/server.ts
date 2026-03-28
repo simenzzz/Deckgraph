@@ -10,12 +10,17 @@ import { createServer as createHttpServer } from 'node:http';
 import type { Server as HttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type WebSocket from 'ws';
-import type { ServerMessage } from '@deckgraph/shared';
+import { randomUUID } from 'node:crypto';
+import type { ServerMessage, FileChangeDetectedMessage, ProjectOverviewMessage } from '@deckgraph/shared';
 import { createLogger } from '../logger.js';
+import { createExecutorRegistry } from '../actions/executors/index.js';
 import { createDefaultRegistry } from '../adapters/index.js';
 import { createImportPackageMap } from '../adapters/importPackageMap.js';
 import { createRegistryCache } from '../adapters/registryCache.js';
 import { createRegistryRateLimiter } from '../adapters/registryRateLimiter.js';
+import { createFileWatcher } from '../watcher/fileWatcher.js';
+import type { FileChangeEvent } from '../watcher/fileWatcher.js';
+import { incrementalScan } from '../scanner/incrementalScanner.js';
 import { createProgressEmitter } from './progress.js';
 import { handleMessage } from './protocol.js';
 import { createStaticHandler } from './staticServer.js';
@@ -35,6 +40,8 @@ export interface ServerOptions {
   readonly projectRoot: string;
   /** Absolute path to the UI dist directory (optional) */
   readonly uiDistPath?: string;
+  /** Disable file watching (default: false) */
+  readonly noWatch?: boolean;
 }
 
 /**
@@ -71,16 +78,69 @@ export function createServer(options: ServerOptions): DeckgraphServer {
     scanResult: null,
     projectRoot: options.projectRoot,
     isScanning: false,
+    fileWatcher: null,
     registry: createDefaultRegistry(registryCache, rateLimiter),
     packageMap: createImportPackageMap(),
     registryCache,
     rateLimiter,
+    executorRegistry: createExecutorRegistry(),
+    moduleActionLocks: new Map(),
   };
 
   const clients = new Set<ClientConnection>();
   let clientCounter = 0;
   let httpServer: HttpServer | null = null;
   let wss: WebSocketServer | null = null;
+
+  function broadcastMessage(message: ServerMessage): void {
+    const payload = JSON.stringify(message);
+    for (const client of clients) {
+      if (client.ws.readyState === client.ws.OPEN) {
+        client.ws.send(payload);
+      }
+    }
+  }
+
+  function onFileChanges(event: FileChangeEvent): void {
+    if (!state.scanResult || state.isScanning) return;
+
+    const changeMsg: FileChangeDetectedMessage = {
+      type: 'file_change_detected',
+      requestId: randomUUID(),
+      affectedModules: [...event.affectedModules],
+      timestamp: new Date().toISOString(),
+    };
+    broadcastMessage(changeMsg);
+
+    state.isScanning = true;
+
+    incrementalScan({
+      projectRoot: state.projectRoot,
+      previousResult: state.scanResult,
+      event,
+      registry: state.registry,
+    })
+      .then((newResult) => {
+        state.scanResult = newResult;
+        state.isScanning = false;
+
+        if (state.fileWatcher) {
+          state.fileWatcher.setModules(newResult.project.modules);
+        }
+
+        const overview: ProjectOverviewMessage = {
+          type: 'project_overview',
+          requestId: changeMsg.requestId,
+          data: newResult.project,
+        };
+        broadcastMessage(overview);
+      })
+      .catch((error) => {
+        state.isScanning = false;
+        const detail = error instanceof Error ? error.message : 'unknown error';
+        logger.error({ error: detail }, 'Incremental scan failed');
+      });
+  }
 
   function onConnection(ws: WebSocket): void {
     clientCounter++;
@@ -152,12 +212,31 @@ export function createServer(options: ServerOptions): DeckgraphServer {
 
         httpServer.listen(port, host, () => {
           logger.info({ host, port }, 'Server listening');
+
+          if (!options.noWatch) {
+            const watcher = createFileWatcher({
+              projectRoot: options.projectRoot,
+              modules: state.scanResult?.project.modules ?? [],
+            });
+            watcher.onChanges(onFileChanges);
+            state.fileWatcher = watcher;
+            watcher.start().catch((error) => {
+              const detail = error instanceof Error ? error.message : 'unknown';
+              logger.error({ error: detail }, 'Failed to start file watcher');
+            });
+          }
+
           resolve();
         });
       });
     },
 
-    stop(): Promise<void> {
+    async stop(): Promise<void> {
+      if (state.fileWatcher) {
+        await state.fileWatcher.stop();
+        state.fileWatcher = null;
+      }
+
       return new Promise((resolve, reject) => {
         if (!httpServer) {
           resolve();
@@ -197,12 +276,7 @@ export function createServer(options: ServerOptions): DeckgraphServer {
     },
 
     broadcast(message: ServerMessage): void {
-      const payload = JSON.stringify(message);
-      for (const client of clients) {
-        if (client.ws.readyState === client.ws.OPEN) {
-          client.ws.send(payload);
-        }
-      }
+      broadcastMessage(message);
     },
 
     getClientCount(): number {
