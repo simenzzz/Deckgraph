@@ -5,6 +5,8 @@
 import { useProjectStore, useConnectionStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { ConnectionIndicator } from './ConnectionIndicator';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { NotificationPanel } from './NotificationPanel';
 import type { WsClient } from '@/lib/wsClient';
 import { createRequestId } from '@/lib/wsClient';
 
@@ -34,9 +36,11 @@ export function Header({ wsClient }: HeaderProps) {
             {project.modules.length} module{project.modules.length !== 1 ? 's' : ''}
           </span>
         )}
+        <WorkspaceSwitcher />
       </div>
       <div className="flex items-center gap-4">
         <ConnectionIndicator />
+        <NotificationPanel />
         <Button
           size="sm"
           onClick={handleScan}

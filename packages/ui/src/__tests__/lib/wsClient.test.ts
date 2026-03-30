@@ -58,14 +58,28 @@ class MockWebSocket {
 }
 
 let mockInstance: MockWebSocket | null = null;
+let rafCallbacks: Array<() => void> = [];
+let rafIdCounter = 0;
 
 beforeEach(() => {
   mockInstance = null;
+  rafCallbacks = [];
+  rafIdCounter = 0;
   vi.stubGlobal('WebSocket', class extends MockWebSocket {
     constructor(url: string) {
       super(url);
       mockInstance = this;
     }
+  });
+  // Stub requestAnimationFrame / cancelAnimationFrame
+  vi.stubGlobal('requestAnimationFrame', (cb: () => void) => {
+    const id = ++rafIdCounter;
+    rafCallbacks.push(cb);
+    return id;
+  });
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+    // Simplified: just clear all pending callbacks
+    rafCallbacks = [];
   });
   vi.useFakeTimers();
 });
@@ -74,6 +88,15 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
+
+/** Flush all pending requestAnimationFrame callbacks. */
+function flushRaf(): void {
+  const pending = [...rafCallbacks];
+  rafCallbacks = [];
+  for (const cb of pending) {
+    cb();
+  }
+}
 
 function createTestClient(overrides?: Partial<Parameters<typeof createWsClient>[0]>): WsClient {
   return createWsClient({
@@ -164,6 +187,9 @@ describe('createWsClient', () => {
 
     client.send({ type: 'scan_project', requestId: 'r1' });
 
+    // Flush the rAF batch
+    flushRaf();
+
     expect(mockInstance!.sent).toHaveLength(1);
     expect(JSON.parse(mockInstance!.sent[0])).toEqual({
       type: 'scan_project',
@@ -218,6 +244,9 @@ describe('createWsClient', () => {
     // New connection opens
     await vi.advanceTimersByTimeAsync(1);
 
+    // Flush the rAF batch (sync message is queued via send())
+    flushRaf();
+
     // Should have sent a sync message
     const lastSent = mockInstance!.sent[mockInstance!.sent.length - 1];
     expect(JSON.parse(lastSent)).toMatchObject({ type: 'sync' });
@@ -235,6 +264,50 @@ describe('createRequestId', () => {
   it('returns unique values', () => {
     const ids = new Set(Array.from({ length: 10 }, () => createRequestId()));
     expect(ids.size).toBe(10);
+  });
+});
+
+describe('WS batching', () => {
+  it('batches multiple sends into a single rAF flush', async () => {
+    const client = createTestClient();
+
+    client.connect();
+    await vi.advanceTimersByTimeAsync(1);
+
+    // Send multiple messages in the same tick
+    client.send({ type: 'scan_project', requestId: 'r1' });
+    client.send({ type: 'scan_project', requestId: 'r2' });
+    client.send({ type: 'scan_project', requestId: 'r3' });
+
+    // Nothing sent yet — queued
+    expect(mockInstance!.sent).toHaveLength(0);
+
+    // Flush the rAF — all three should be sent in one frame
+    flushRaf();
+
+    expect(mockInstance!.sent).toHaveLength(3);
+    expect(JSON.parse(mockInstance!.sent[0])).toMatchObject({ requestId: 'r1' });
+    expect(JSON.parse(mockInstance!.sent[1])).toMatchObject({ requestId: 'r2' });
+    expect(JSON.parse(mockInstance!.sent[2])).toMatchObject({ requestId: 'r3' });
+
+    client.disconnect();
+  });
+
+  it('clears pending queue on disconnect', async () => {
+    const client = createTestClient();
+
+    client.connect();
+    await vi.advanceTimersByTimeAsync(1);
+
+    client.send({ type: 'scan_project', requestId: 'r1' });
+
+    // Disconnect before rAF fires
+    client.disconnect();
+
+    // Flush — nothing should be sent (queue was cleared)
+    flushRaf();
+
+    expect(mockInstance!.sent).toHaveLength(0);
   });
 });
 

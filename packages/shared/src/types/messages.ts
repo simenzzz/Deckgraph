@@ -6,7 +6,7 @@
  */
 
 import type { PackageActionResult, PackageBatchOperation } from './actions.js';
-import type { Dependency, DependencyScope, Ecosystem, Module, Project } from './project.js';
+import type { Dependency, DependencyScope, Ecosystem, Module, Project, Workspace } from './project.js';
 import type { ViewQuery, ViewResult } from './views.js';
 
 // ============================================================================
@@ -18,6 +18,7 @@ import type { ViewQuery, ViewResult } from './views.js';
  */
 export type ClientMessage =
   | ScanProjectMessage
+  | ScanWorkspaceMessage
   | ViewQueryMessage
   | AnalyzeImportsMessage
   | EnrichDependencyMessage
@@ -32,6 +33,14 @@ export type ClientMessage =
  */
 export interface ScanProjectMessage {
   readonly type: 'scan_project';
+  readonly requestId: string;
+}
+
+/**
+ * Request a workspace scan (polyrepo mode).
+ */
+export interface ScanWorkspaceMessage {
+  readonly type: 'scan_workspace';
   readonly requestId: string;
 }
 
@@ -126,14 +135,17 @@ export interface PackageBatchMessage {
  */
 export type ServerMessage =
   | ProjectOverviewMessage
+  | WorkspaceOverviewMessage
   | ViewResultMessage
   | ModuleUpdatedMessage
   | DependencyEnrichedMessage
   | ProgressMessage
   | ErrorMessage
+  | NotificationMessage
   | FileChangeDetectedMessage
   | PackageActionResultMessage
-  | PackageBatchResultMessage;
+  | PackageBatchResultMessage
+  | ReadyMessage;
 
 /**
  * Full project overview after scan completion.
@@ -142,6 +154,15 @@ export interface ProjectOverviewMessage {
   readonly type: 'project_overview';
   readonly requestId: string;
   readonly data: Project;
+}
+
+/**
+ * Workspace overview after workspace scan completion (polyrepo mode).
+ */
+export interface WorkspaceOverviewMessage {
+  readonly type: 'workspace_overview';
+  readonly requestId: string;
+  readonly data: Workspace;
 }
 
 /**
@@ -192,6 +213,18 @@ export interface ErrorMessage {
 }
 
 /**
+ * Notification message from developer hooks or system events.
+ */
+export interface NotificationMessage {
+  readonly type: 'notification';
+  readonly requestId: string;
+  readonly severity: 'info' | 'warning' | 'error';
+  readonly title: string;
+  readonly body: string;
+  readonly timestamp: string;
+}
+
+/**
  * Server-initiated notification that files have changed on disk.
  * Sent before the incremental re-scan begins.
  */
@@ -222,4 +255,15 @@ export interface PackageBatchResultMessage {
   readonly totalCount: number;
   /** true if execution stopped early due to a per-module failure */
   readonly stoppedEarly: boolean;
+}
+
+/**
+ * Initial handshake message sent when a client connects.
+ * Informs the client whether a config file exists and whether scan data is available.
+ */
+export interface ReadyMessage {
+  readonly type: 'ready';
+  readonly requestId: string;
+  readonly configPresent: boolean;
+  readonly hasScannedData: boolean;
 }

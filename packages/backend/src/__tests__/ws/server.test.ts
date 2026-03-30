@@ -44,12 +44,22 @@ vi.mock('../../graph/queryEngine.js', () => ({
   }),
 }));
 
-/** Connect a WS client to the server and wait for the connection to be open. */
+/** Connect a WS client and wait for the initial 'ready' message. */
 function connectClient(port: number): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(`ws://127.0.0.1:${port}`);
-    ws.on('open', () => resolve(ws));
     ws.on('error', reject);
+    // Resolve after receiving the initial 'ready' message so callers
+    // don't have to worry about race conditions with it.
+    ws.once('message', (data: Buffer | string) => {
+      const raw = typeof data === 'string' ? data : data.toString('utf-8');
+      const msg = JSON.parse(raw) as { type: string };
+      if (msg.type !== 'ready') {
+        reject(new Error(`Expected 'ready' message, got: ${msg.type}`));
+        return;
+      }
+      resolve(ws);
+    });
   });
 }
 

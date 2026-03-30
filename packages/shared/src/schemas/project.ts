@@ -22,6 +22,12 @@ import type {
   Module,
   ProjectConfig,
   Project,
+  HookEntry,
+  HooksConfig,
+  WorkspaceConfig,
+  CrossRootVersion,
+  CrossRootDependency,
+  Workspace,
 } from '../types/project.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
@@ -124,6 +130,46 @@ export const projectSchema = z.object({
 });
 
 // ============================================================================
+// Workspace Types
+// ============================================================================
+
+export const hookEntrySchema = z.object({
+  cmd: z.string().min(1).max(4096),
+});
+
+export const hooksConfigSchema = z.object({
+  onScanComplete: z.array(hookEntrySchema).max(32),
+  onOutdated: z.array(hookEntrySchema).max(32),
+  onUnused: z.array(hookEntrySchema).max(32),
+  onLicenseViolation: z.array(hookEntrySchema).max(32),
+});
+
+export const workspaceConfigSchema = projectConfigSchema.extend({
+  roots: z.array(z.string().min(1).max(1024)).min(1).max(64),
+  hooks: hooksConfigSchema,
+});
+
+export const crossRootVersionSchema = z.object({
+  projectRoot: z.string().min(1).max(1024),
+  modulePath: z.string().min(1).max(1024),
+  version: z.string().min(1).max(256),
+  constraint: z.string().max(512),
+});
+
+export const crossRootDependencySchema = z.object({
+  ecosystem: ecosystemSchema,
+  packageName: z.string().min(1).max(512),
+  versions: z.array(crossRootVersionSchema).min(2).max(256),
+});
+
+export const workspaceSchema = z.object({
+  projects: z.array(projectSchema).min(1).max(64),
+  config: workspaceConfigSchema.nullable(),
+  crossRootDeps: z.array(crossRootDependencySchema).max(10000),
+  lastScannedAt: z.string().datetime(),
+});
+
+// ============================================================================
 // Parse Functions
 // ============================================================================
 
@@ -137,6 +183,14 @@ export const parseDependency = (value: unknown) => dependencySchema.parse(value)
 export const parseModule = (value: unknown) => moduleSchema.parse(value);
 export const parseProjectConfig = (value: unknown) => projectConfigSchema.parse(value);
 export const parseProject = (value: unknown) => projectSchema.parse(value);
+
+// Workspace parse functions
+export const parseHookEntry = (value: unknown) => hookEntrySchema.parse(value);
+export const parseHooksConfig = (value: unknown) => hooksConfigSchema.parse(value);
+export const parseWorkspaceConfig = (value: unknown) => workspaceConfigSchema.parse(value);
+export const parseCrossRootVersion = (value: unknown) => crossRootVersionSchema.parse(value);
+export const parseCrossRootDependency = (value: unknown) => crossRootDependencySchema.parse(value);
+export const parseWorkspace = (value: unknown) => workspaceSchema.parse(value);
 
 // ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
@@ -159,6 +213,12 @@ export type _ProjectSchemaAssertions = [
   Expect<z.infer<typeof moduleSchema> extends Module ? true : false>,
   Expect<z.infer<typeof projectConfigSchema> extends ProjectConfig ? true : false>,
   Expect<z.infer<typeof projectSchema> extends Project ? true : false>,
+  Expect<z.infer<typeof hookEntrySchema> extends HookEntry ? true : false>,
+  Expect<z.infer<typeof hooksConfigSchema> extends HooksConfig ? true : false>,
+  Expect<z.infer<typeof workspaceConfigSchema> extends WorkspaceConfig ? true : false>,
+  Expect<z.infer<typeof crossRootVersionSchema> extends CrossRootVersion ? true : false>,
+  Expect<z.infer<typeof crossRootDependencySchema> extends CrossRootDependency ? true : false>,
+  Expect<z.infer<typeof workspaceSchema> extends Workspace ? true : false>,
 
   // Reverse direction: Interface ⊆ ZodOutput (catches missing schema fields)
   Expect<Mutable<Ecosystem> extends z.infer<typeof ecosystemSchema> ? true : false>,
@@ -172,4 +232,10 @@ export type _ProjectSchemaAssertions = [
   Expect<Mutable<Module> extends z.infer<typeof moduleSchema> ? true : false>,
   Expect<Mutable<ProjectConfig> extends z.infer<typeof projectConfigSchema> ? true : false>,
   Expect<Mutable<Project> extends z.infer<typeof projectSchema> ? true : false>,
+  Expect<Mutable<HookEntry> extends z.infer<typeof hookEntrySchema> ? true : false>,
+  Expect<Mutable<HooksConfig> extends z.infer<typeof hooksConfigSchema> ? true : false>,
+  Expect<Mutable<WorkspaceConfig> extends z.infer<typeof workspaceConfigSchema> ? true : false>,
+  Expect<Mutable<CrossRootVersion> extends z.infer<typeof crossRootVersionSchema> ? true : false>,
+  Expect<Mutable<CrossRootDependency> extends z.infer<typeof crossRootDependencySchema> ? true : false>,
+  Expect<Mutable<Workspace> extends z.infer<typeof workspaceSchema> ? true : false>,
 ];

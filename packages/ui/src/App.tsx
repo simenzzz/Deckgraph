@@ -11,6 +11,7 @@ import { ProjectOverview } from '@/components/overview';
 import { ModuleExplorer } from '@/components/explorer';
 import { HealthReport } from '@/components/health';
 import { CrossLanguageGraph } from '@/components/crosslang';
+import { ErrorBoundary } from '@/components/errors';
 import { useConnectionStore, useViewStore } from '@/stores';
 import { createWsClient, getWsUrl, type WsClient } from '@/lib/wsClient';
 import { dispatchServerMessage } from '@/lib/messageDispatcher';
@@ -45,10 +46,18 @@ export function App() {
 
   return (
     <Shell wsClient={wsClient}>
-      {currentView === 'overview' && <ProjectOverview wsClient={wsClient} />}
-      {currentView === 'explorer' && <ModuleExplorer wsClient={wsClient} />}
-      {currentView === 'health' && <HealthReport wsClient={wsClient} />}
-      {currentView === 'graph' && <CrossLanguageGraph />}
+      {currentView === 'overview' && (
+        <ErrorBoundary><ProjectOverview wsClient={wsClient} /></ErrorBoundary>
+      )}
+      {currentView === 'explorer' && (
+        <ErrorBoundary><ModuleExplorer wsClient={wsClient} /></ErrorBoundary>
+      )}
+      {currentView === 'health' && (
+        <ErrorBoundary><HealthReport wsClient={wsClient} /></ErrorBoundary>
+      )}
+      {currentView === 'graph' && (
+        <ErrorBoundary><CrossLanguageGraph /></ErrorBoundary>
+      )}
     </Shell>
   );
 }

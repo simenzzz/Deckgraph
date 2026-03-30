@@ -10,7 +10,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import yaml from 'js-yaml';
 import { z } from 'zod';
-import type { ProjectConfig } from '@deckgraph/shared';
+import type { ProjectConfig, WorkspaceConfig } from '@deckgraph/shared';
+import { workspaceConfigSchema } from '@deckgraph/shared';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('configLoader');
@@ -43,6 +44,35 @@ const rawConfigSchema = z
         z.array(z.string().min(1).max(128)).max(64),
       )
       .default({}),
+  })
+  .strict();
+
+/**
+ * Raw workspace config schema with optional roots and hooks fields.
+ * All fields are optional for backward compatibility.
+ */
+const rawWorkspaceConfigSchema = z
+  .object({
+    'ignore-paths': z
+      .array(z.string().min(1).max(512))
+      .max(256)
+      .default([]),
+    'concern-overrides': z
+      .record(
+        z.string().min(1).max(512),
+        z.array(z.string().min(1).max(128)).max(64),
+      )
+      .default({}),
+    roots: z.array(z.string().min(1).max(1024)).max(64).optional(),
+    hooks: z
+      .object({
+        'on-scan-complete': z.array(z.string().min(1).max(4096)).max(32).default([]),
+        'on-outdated': z.array(z.string().min(1).max(4096)).max(32).default([]),
+        'on-unused': z.array(z.string().min(1).max(4096)).max(32).default([]),
+        'on-license-violation': z.array(z.string().min(1).max(4096)).max(32).default([]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -97,4 +127,82 @@ export async function loadConfig(projectRoot: string): Promise<ProjectConfig | n
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+/**
+ * Load and validate workspace config from the given config root.
+ * Returns null if the file does not exist or has no roots field (single-project mode).
+ * Throws DeckgraphConfigError if the file exists but is invalid.
+ *
+ * Workspace mode is detected by the presence of the 'roots' field.
+ */
+export async function loadWorkspaceConfig(configRoot: string): Promise<WorkspaceConfig | null> {
+  const configPath = join(configRoot, CONFIG_FILENAME);
+
+  let rawContent: string;
+  try {
+    rawContent = await readFile(configPath, 'utf-8');
+  } catch (error: unknown) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      logger.debug({ configPath }, 'No .deckgraph.yaml found');
+      return null;
+    }
+    throw error;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = yaml.load(rawContent);
+  } catch {
+    throw new DeckgraphConfigError(
+      `Failed to parse ${CONFIG_FILENAME}: invalid YAML syntax`,
+    );
+  }
+
+  // Empty YAML file → null document
+  if (parsed == null) {
+    return null;
+  }
+
+  const result = rawWorkspaceConfigSchema.safeParse(parsed);
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
+    throw new DeckgraphConfigError(
+      `Invalid ${CONFIG_FILENAME}:\n${issues}`,
+    );
+  }
+
+  const data = result.data;
+
+  // If no roots field, this is single-project mode
+  if (!data.roots) {
+    return null;
+  }
+
+  // Convert kebab-case hooks to camelCase HookEntry format
+  const hooksConfig = data.hooks
+    ? {
+        onScanComplete: data.hooks['on-scan-complete'].map((cmd) => ({ cmd })),
+        onOutdated: data.hooks['on-outdated'].map((cmd) => ({ cmd })),
+        onUnused: data.hooks['on-unused'].map((cmd) => ({ cmd })),
+        onLicenseViolation: data.hooks['on-license-violation'].map((cmd) => ({ cmd })),
+      }
+    : {
+        onScanComplete: [],
+        onOutdated: [],
+        onUnused: [],
+        onLicenseViolation: [],
+      };
+
+  const workspaceConfig: WorkspaceConfig = {
+    ignorePaths: data['ignore-paths'],
+    concernOverrides: data['concern-overrides'],
+    roots: data.roots,
+    hooks: hooksConfig,
+  };
+
+  // Validate with the shared schema
+  return workspaceConfigSchema.parse(workspaceConfig);
 }

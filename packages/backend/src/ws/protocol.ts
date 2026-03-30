@@ -9,13 +9,14 @@ import { ZodError } from 'zod';
 import type {
   ClientMessage,
   ServerMessage,
+  NotificationMessage,
   ProjectOverviewMessage,
+  WorkspaceOverviewMessage,
   ViewResultMessage,
   ModuleUpdatedMessage,
   DependencyEnrichedMessage,
   PackageActionResultMessage,
   PackageBatchResultMessage,
-  ErrorMessage,
   Ecosystem,
   DependencyScope,
   ViewQuery,
@@ -26,18 +27,24 @@ import { updatePackage, installPackage, removePackage } from '../actions/package
 import { executeBatch } from '../actions/batchExecutor.js';
 import { isReasonablePackageName } from '../actions/validators.js';
 import { scanProject } from '../scanner/scanner.js';
+import { scanWorkspace } from '../scanner/workspaceScanner.js';
 import { incrementalScan } from '../scanner/incrementalScanner.js';
 import type { FileChangeEvent } from '../watcher/fileWatcher.js';
 import { executeQuery } from '../graph/queryEngine.js';
 import { resolveImports } from '../analysis/importResolver.js';
 import { addModule } from '../graph/dependencyGraph.js';
+import { loadWorkspaceConfig } from '../config/configLoader.js';
+import { discoverRoots } from '../discovery/workspaceDiscovery.js';
+import { runHooksForEvent } from '../hooks/notifier.js';
 import { createLogger } from '../logger.js';
+import { ErrorCatalog, createCatalogError, mapError } from '../errors/index.js';
 import type { ClientConnection, ProgressEmitter, ServerState } from './types.js';
 
 const logger = createLogger('protocol');
 
 const VALID_TYPES = [
   'scan_project',
+  'scan_workspace',
   'view_query',
   'sync',
   'analyze_imports',
@@ -61,17 +68,14 @@ export async function handleMessage(
   connection: ClientConnection,
   state: ServerState,
   emitProgress: ProgressEmitter,
+  broadcast?: (message: ServerMessage) => void,
 ): Promise<ServerMessage> {
   let json: unknown;
   try {
     json = JSON.parse(raw);
   } catch {
     logger.warn({ clientId: connection.clientId }, 'Received invalid JSON');
-    return createError(
-      'unknown',
-      'Invalid JSON received',
-      'Ensure the message is valid JSON',
-    );
+    return createCatalogError(ErrorCatalog.INVALID_JSON, 'unknown');
   }
 
   let parsed: ClientMessage;
@@ -83,16 +87,12 @@ export async function handleMessage(
         { clientId: connection.clientId, errors: error.errors },
         'Message validation failed',
       );
-      return createError(
-        'unknown',
-        'Message validation failed',
-        `Valid message types: ${VALID_TYPES.join(', ')}`,
-      );
+      return createCatalogError(ErrorCatalog.VALIDATION_FAILED, 'unknown', `Valid message types: ${VALID_TYPES.join(', ')}`);
     }
     throw error;
   }
 
-  return dispatch(parsed, state, emitProgress);
+  return dispatch(parsed, state, emitProgress, broadcast);
 }
 
 /**
@@ -103,11 +103,20 @@ async function dispatch(
   message: ClientMessage,
   state: ServerState,
   emitProgress: ProgressEmitter,
+  broadcast?: (message: ServerMessage) => void,
 ): Promise<ServerMessage> {
   try {
     switch (message.type) {
       case 'scan_project':
         return await handleScanProject(message.requestId, state, emitProgress);
+
+      case 'scan_workspace':
+        return await handleScanWorkspace(
+          message.requestId,
+          state,
+          emitProgress,
+          broadcast,
+        );
 
       case 'view_query':
         return handleViewQuery(message.requestId, message.query, state);
@@ -184,11 +193,8 @@ async function dispatch(
       { requestId: message.requestId, error: detail },
       'Handler error',
     );
-    return createError(
-      message.requestId,
-      'An internal error occurred while processing your request',
-      'Try again or check server logs for details',
-    );
+    const entry = mapError(error);
+    return createCatalogError(entry, message.requestId);
   }
 }
 
@@ -201,11 +207,7 @@ async function handleScanProject(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (state.isScanning) {
-    return createError(
-      requestId,
-      'A scan is already in progress',
-      'Wait for the current scan to complete before starting another',
-    );
+    return createCatalogError(ErrorCatalog.SCAN_ALREADY_RUNNING, requestId);
   }
 
   state.isScanning = true;
@@ -232,6 +234,101 @@ async function handleScanProject(
 }
 
 /**
+ * Handle scan_workspace: load workspace config, scan all roots, return workspace overview.
+ */
+async function handleScanWorkspace(
+  requestId: string,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+  broadcast?: (message: ServerMessage) => void,
+): Promise<ServerMessage> {
+  if (state.isScanning) {
+    return createCatalogError(ErrorCatalog.SCAN_ALREADY_RUNNING, requestId);
+  }
+
+  state.isScanning = true;
+
+  try {
+    emitProgress(requestId, 'Loading workspace configuration...', 0);
+
+    const workspaceConfig = await loadWorkspaceConfig(state.projectRoot);
+
+    if (!workspaceConfig) {
+      return createCatalogError(ErrorCatalog.NO_WORKSPACE_CONFIG, requestId);
+    }
+
+    state.workspaceConfig = workspaceConfig;
+
+    emitProgress(requestId, 'Discovering workspace roots...', 0);
+
+    const roots = await discoverRoots(state.projectRoot, workspaceConfig);
+
+    emitProgress(requestId, `Scanning ${roots.length} workspace roots...`, 0);
+
+    // Create broadcast function for hooks (narrowed to NotificationMessage)
+    const broadcastFn: (msg: NotificationMessage) => void = broadcast
+      ? (msg: NotificationMessage) => broadcast(msg)
+      : () => {
+          // No-op if no broadcast function available
+        };
+
+    const result = await scanWorkspace({
+      roots,
+      config: workspaceConfig,
+    });
+
+    state.workspaceScanResult = result;
+
+    // Store first project's scan result for backward compatibility
+    const firstResult = result.projectResults.values().next().value;
+    if (firstResult) {
+      state.scanResult = firstResult;
+    }
+
+    emitProgress(requestId, 'Workspace scan complete', 1);
+
+    // Trigger on-scan-complete hooks
+    const totalModules = result.workspace.projects.reduce(
+      (sum, p) => sum + p.modules.length,
+      0,
+    );
+    const totalDeps = result.workspace.projects.reduce(
+      (sum, p) => sum + p.modules.reduce((s, m) => s + m.dependencies.length, 0),
+      0,
+    );
+
+    // Fire hooks in background (don't block the scan response)
+    runHooksForEvent(
+      workspaceConfig.hooks,
+      'on-scan-complete',
+      {
+        event: 'on-scan-complete',
+        projectRoot: state.projectRoot,
+        data: {
+          type: 'scan-complete',
+          moduleCount: totalModules,
+          depCount: totalDeps,
+        },
+      },
+      broadcastFn,
+    ).catch((error) => {
+      const detail = error instanceof Error ? error.message : 'unknown';
+      logger.error({ error: detail }, 'Hook execution failed');
+    });
+
+    const overview: WorkspaceOverviewMessage = {
+      type: 'workspace_overview',
+      requestId,
+      data: result.workspace,
+    };
+
+    return overview;
+  } finally {
+    state.isScanning = false;
+  }
+}
+
+/**
  * Handle view_query: filter the graph and return results.
  */
 function handleViewQuery(
@@ -240,11 +337,7 @@ function handleViewQuery(
   state: ServerState,
 ): ServerMessage {
   if (!state.scanResult) {
-    return createError(
-      requestId,
-      'No scan data available',
-      'Run a scan_project request first',
-    );
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const viewResult = executeQuery(state.scanResult.graph, query);
@@ -263,11 +356,7 @@ function handleViewQuery(
  */
 function handleSync(requestId: string, state: ServerState): ServerMessage {
   if (!state.scanResult) {
-    return createError(
-      requestId,
-      'No scan data available',
-      'Run a scan_project request first',
-    );
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const overview: ProjectOverviewMessage = {
@@ -289,11 +378,7 @@ async function handleAnalyzeImports(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (!state.scanResult) {
-    return createError(
-      requestId,
-      'No scan data available',
-      'Run a scan_project request first',
-    );
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const module = state.scanResult.project.modules.find(
@@ -301,19 +386,11 @@ async function handleAnalyzeImports(
   );
 
   if (!module) {
-    return createError(
-      requestId,
-      `Module not found: ${modulePath}`,
-      'Check the module path and ensure a scan has been completed',
-    );
+    return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
   }
 
   if (module.analysisState !== 'manifest-only') {
-    return createError(
-      requestId,
-      `Module already analyzed: ${modulePath}`,
-      'Import analysis has already been run for this module',
-    );
+    return createCatalogError(ErrorCatalog.MODULE_ALREADY_ANALYZED, requestId, modulePath);
   }
 
   emitProgress(requestId, `Analyzing imports for ${module.name}...`, 0);
@@ -346,6 +423,11 @@ async function handleAnalyzeImports(
 
   emitProgress(requestId, 'Import analysis complete', 1);
 
+  // TODO: Detect unused dependencies and trigger on-unused hooks
+  // This would require analyzing which deps are not referenced in any import
+  // For now, placeholder: unusedDeps = []
+  // await _maybeTriggerHooks(state, undefined, 'on-unused', unusedDeps);
+
   const response: ModuleUpdatedMessage = {
     type: 'module_updated',
     requestId,
@@ -366,28 +448,16 @@ async function handleEnrichDependency(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (!state.scanResult) {
-    return createError(
-      requestId,
-      'No scan data available',
-      'Run a scan_project request first',
-    );
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   if (!isReasonablePackageName(packageName)) {
-    return createError(
-      requestId,
-      `Invalid package name: "${packageName}"`,
-      'Package names may only contain alphanumeric characters, dots, hyphens, underscores, slashes, @, and colons',
-    );
+    return createCatalogError(ErrorCatalog.INVALID_PACKAGE_NAME, requestId, packageName);
   }
 
   const adapter = state.registry.getAdapterForEcosystem(ecosystem);
   if (!adapter) {
-    return createError(
-      requestId,
-      `No adapter registered for ecosystem: ${ecosystem}`,
-      'Supported ecosystems: npm, pypi, go, cargo, maven',
-    );
+    return createCatalogError(ErrorCatalog.NO_ADAPTER, requestId, ecosystem);
   }
 
   emitProgress(requestId, `Querying ${ecosystem} registry for ${packageName}...`, 0);
@@ -395,11 +465,7 @@ async function handleEnrichDependency(
   const registryMeta = await adapter.queryRegistry(packageName);
 
   if (!registryMeta) {
-    return createError(
-      requestId,
-      `Package not found: ${packageName}`,
-      `Check the package name and ensure it exists on the ${ecosystem} registry`,
-    );
+    return createCatalogError(ErrorCatalog.PACKAGE_NOT_FOUND, requestId, packageName);
   }
 
   // Find the dependency in the project and enrich it immutably
@@ -434,12 +500,18 @@ async function handleEnrichDependency(
 
   emitProgress(requestId, 'Enrichment complete', 1);
 
+  // TODO: Detect outdated packages and trigger on-outdated hooks
+  // This would require comparing current version with registryMeta.latestVersion
+  // For now, placeholder: outdatedDeps = []
+  // await _maybeTriggerHooks(state, undefined, 'on-outdated', outdatedDeps);
+
+  // TODO: Detect license violations and trigger on-license-violation hooks
+  // This would require checking licenses against a policy
+  // For now, placeholder: violatingDeps = []
+  // await _maybeTriggerHooks(state, undefined, 'on-license-violation', violatingDeps);
+
   if (!enrichedDep) {
-    return createError(
-      requestId,
-      `Dependency ${packageName} not found in any scanned module`,
-      'Ensure the package is a declared dependency in the project',
-    );
+    return createCatalogError(ErrorCatalog.DEPENDENCY_NOT_IN_PROJECT, requestId, packageName);
   }
 
   const response: DependencyEnrichedMessage = {
@@ -464,22 +536,18 @@ async function handlePackageUpdate(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (!state.scanResult) {
-    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
   if (!module) {
-    return createError(requestId, `Module not found: ${modulePath}`, 'Check the module path');
+    return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
   }
 
   // Check per-module lock
   const existingLock = state.moduleActionLocks.get(modulePath);
   if (existingLock) {
-    return createError(
-      requestId,
-      `A package operation is already in progress on "${module.name}"`,
-      'Wait for the current operation to complete',
-    );
+    return createCatalogError(ErrorCatalog.OPERATION_IN_PROGRESS, requestId, module.name);
   }
 
   state.moduleActionLocks.set(modulePath, requestId);
@@ -531,21 +599,17 @@ async function handlePackageInstall(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (!state.scanResult) {
-    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
   if (!module) {
-    return createError(requestId, `Module not found: ${modulePath}`, 'Check the module path');
+    return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
   }
 
   const existingLock = state.moduleActionLocks.get(modulePath);
   if (existingLock) {
-    return createError(
-      requestId,
-      `A package operation is already in progress on "${module.name}"`,
-      'Wait for the current operation to complete',
-    );
+    return createCatalogError(ErrorCatalog.OPERATION_IN_PROGRESS, requestId, module.name);
   }
 
   state.moduleActionLocks.set(modulePath, requestId);
@@ -597,21 +661,17 @@ async function handlePackageRemove(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (!state.scanResult) {
-    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
   if (!module) {
-    return createError(requestId, `Module not found: ${modulePath}`, 'Check the module path');
+    return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
   }
 
   const existingLock = state.moduleActionLocks.get(modulePath);
   if (existingLock) {
-    return createError(
-      requestId,
-      `A package operation is already in progress on "${module.name}"`,
-      'Wait for the current operation to complete',
-    );
+    return createCatalogError(ErrorCatalog.OPERATION_IN_PROGRESS, requestId, module.name);
   }
 
   state.moduleActionLocks.set(modulePath, requestId);
@@ -658,17 +718,13 @@ async function handlePackageBatch(
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
   if (!state.scanResult) {
-    return createError(requestId, 'No scan data available', 'Run a scan_project request first');
+    return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   // Pre-validate all package names before starting the batch
   for (const op of operations) {
     if (!isReasonablePackageName(op.packageName)) {
-      return createError(
-        requestId,
-        `Invalid package name in batch: "${op.packageName}"`,
-        'Package names may only contain alphanumeric characters, dots, hyphens, underscores, slashes, @, and colons',
-      );
+      return createCatalogError(ErrorCatalog.INVALID_PACKAGE_NAME, requestId, op.packageName);
     }
   }
 
@@ -728,18 +784,3 @@ function buildModuleChangeEvent(module: { readonly path: string; readonly manife
   };
 }
 
-/**
- * Create an ErrorMessage with the standard format.
- */
-function createError(
-  requestId: string,
-  message: string,
-  suggestion: string,
-): ErrorMessage {
-  return {
-    type: 'error',
-    requestId,
-    message,
-    suggestion,
-  };
-}

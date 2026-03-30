@@ -161,13 +161,49 @@ export function createWsClient(options: WsClientOptions): WsClient {
     };
   }
 
-  // H4: Returns boolean indicating whether the message was sent
-  function send(message: ClientMessage): boolean {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
-      return true;
+  // Outbound message queue for batched sending.
+  // Multiple send() calls within the same frame are flushed once per rAF.
+  const outboundQueue: ClientMessage[] = [];
+  let flushHandle: number | null = null;
+
+  function flushQueue(): void {
+    flushHandle = null;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      if (outboundQueue.length > 0) {
+        // Connection closed between send() and the rAF flush — messages are dropped.
+        // This is observable here so callers can react via onStatusChange('disconnected').
+        console.warn(`[wsClient] Dropping ${outboundQueue.length} queued message(s): socket not open`);
+        outboundQueue.length = 0;
+      }
+      return;
     }
-    return false;
+    for (const msg of outboundQueue) {
+      ws.send(JSON.stringify(msg));
+    }
+    outboundQueue.length = 0;
+  }
+
+  function scheduleFlush(): void {
+    if (flushHandle === null) {
+      flushHandle = requestAnimationFrame(flushQueue);
+    }
+  }
+
+  function send(message: ClientMessage): boolean {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+    outboundQueue.push(message);
+    scheduleFlush();
+    return true;
+  }
+
+  function cancelPendingFlush(): void {
+    if (flushHandle !== null) {
+      cancelAnimationFrame(flushHandle);
+      flushHandle = null;
+    }
+    outboundQueue.length = 0;
   }
 
   return {
@@ -179,6 +215,7 @@ export function createWsClient(options: WsClientOptions): WsClient {
 
     disconnect() {
       intentionalClose = true;
+      cancelPendingFlush();
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;

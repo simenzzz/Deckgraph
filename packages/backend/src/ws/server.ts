@@ -11,7 +11,7 @@ import type { Server as HttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type WebSocket from 'ws';
 import { randomUUID } from 'node:crypto';
-import type { ServerMessage, FileChangeDetectedMessage, ProjectOverviewMessage } from '@deckgraph/shared';
+import type { ServerMessage, FileChangeDetectedMessage, ProjectOverviewMessage, ReadyMessage } from '@deckgraph/shared';
 import { createLogger } from '../logger.js';
 import { createExecutorRegistry } from '../actions/executors/index.js';
 import { createDefaultRegistry } from '../adapters/index.js';
@@ -21,6 +21,7 @@ import { createRegistryRateLimiter } from '../adapters/registryRateLimiter.js';
 import { createFileWatcher } from '../watcher/fileWatcher.js';
 import type { FileChangeEvent } from '../watcher/fileWatcher.js';
 import { incrementalScan } from '../scanner/incrementalScanner.js';
+import { loadConfig } from '../config/configLoader.js';
 import { createProgressEmitter } from './progress.js';
 import { handleMessage } from './protocol.js';
 import { createStaticHandler } from './staticServer.js';
@@ -79,6 +80,9 @@ export function createServer(options: ServerOptions): DeckgraphServer {
     projectRoot: options.projectRoot,
     isScanning: false,
     fileWatcher: null,
+    fileWatchers: new Map(),
+    workspaceScanResult: null,
+    workspaceConfig: null,
     registry: createDefaultRegistry(registryCache, rateLimiter),
     packageMap: createImportPackageMap(),
     registryCache,
@@ -122,7 +126,6 @@ export function createServer(options: ServerOptions): DeckgraphServer {
     })
       .then((newResult) => {
         state.scanResult = newResult;
-        state.isScanning = false;
 
         if (state.fileWatcher) {
           state.fileWatcher.setModules(newResult.project.modules);
@@ -136,9 +139,11 @@ export function createServer(options: ServerOptions): DeckgraphServer {
         broadcastMessage(overview);
       })
       .catch((error) => {
-        state.isScanning = false;
         const detail = error instanceof Error ? error.message : 'unknown error';
         logger.error({ error: detail }, 'Incremental scan failed');
+      })
+      .finally(() => {
+        state.isScanning = false;
       });
   }
 
@@ -150,12 +155,37 @@ export function createServer(options: ServerOptions): DeckgraphServer {
     clients.add(connection);
     logger.info({ clientId }, 'Client connected');
 
+    // Send ready message with project state
+    void (async () => {
+      try {
+        let configPresent = false;
+        try {
+          configPresent = (await loadConfig(state.projectRoot)) !== null;
+        } catch {
+          // Config file doesn't exist or is invalid — treat as absent
+          configPresent = false;
+        }
+        const ready: ReadyMessage = {
+          type: 'ready',
+          requestId: randomUUID(),
+          configPresent,
+          hasScannedData: state.scanResult !== null,
+        };
+        if (ws.readyState === ws.OPEN) {
+          ws.send(JSON.stringify(ready));
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'unknown';
+        logger.error({ clientId, error: detail }, 'Failed to send ready message');
+      }
+    })();
+
     const emitProgress = createProgressEmitter(ws, logger);
 
     ws.on('message', (data: Buffer | string) => {
       const raw = typeof data === 'string' ? data : data.toString('utf-8');
 
-      handleMessage(raw, connection, state, emitProgress)
+      handleMessage(raw, connection, state, emitProgress, broadcastMessage)
         .then((response) => {
           if (ws.readyState === ws.OPEN) {
             ws.send(JSON.stringify(response));
@@ -236,6 +266,18 @@ export function createServer(options: ServerOptions): DeckgraphServer {
         await state.fileWatcher.stop();
         state.fileWatcher = null;
       }
+
+      // Stop all workspace watchers
+      for (const [rootPath, watcher] of state.fileWatchers) {
+        try {
+          await watcher.stop();
+          logger.debug({ rootPath }, 'Stopped workspace file watcher');
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : 'unknown';
+          logger.warn({ rootPath, error: detail }, 'Failed to stop file watcher');
+        }
+      }
+      state.fileWatchers.clear();
 
       return new Promise((resolve, reject) => {
         if (!httpServer) {

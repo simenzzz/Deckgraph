@@ -6,3 +6,4 @@ export { depKey, emptyGraph, buildGraph, addModule, removeModule } from './depen
 export { detectCycles } from './cycleDetector.js';
 export type { CycleDetectionResult } from './cycleDetector.js';
 export { executeQuery } from './queryEngine.js';
+export { detectCrossRootDeps } from './workspaceGraph.js';

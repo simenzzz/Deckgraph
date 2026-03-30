@@ -5,6 +5,7 @@
  * can reuse the same module-building logic.
  */
 
+import { availableParallelism } from 'node:os';
 import type {
   AdapterRegistry,
   Dependency,
@@ -18,6 +19,9 @@ import type { DiscoveredModule } from '../discovery/moduleDiscovery.js';
 import { createLogger } from '../logger.js';
 
 const logger = createLogger('scanner');
+
+/** Maximum concurrency for parallel module building */
+const MAX_CONCURRENCY = 8;
 
 /**
  * Find the adapter for a discovered module by checking its manifest files.
@@ -77,38 +81,86 @@ export function toFullDependency(
 /**
  * Parse manifests for all discovered modules and convert to full Module objects.
  * Skips modules with no adapter or adapter errors.
+ *
+ * Uses concurrency-limited parallel execution for better performance
+ * on large monorepos.
  */
 export async function buildModules(
   discovered: readonly DiscoveredModule[],
   projectRoot: string,
   registry: AdapterRegistry,
 ): Promise<readonly Module[]> {
-  const modules: Module[] = [];
+  if (discovered.length === 0) return [];
 
-  for (const disc of discovered) {
-    const adapter = findAdapter(disc, registry);
-    if (!adapter) {
-      logger.warn(
-        { path: disc.path, ecosystem: disc.ecosystem },
-        'No adapter registered — skipping module',
-      );
-      continue;
-    }
+  const concurrency = Math.min(
+    Math.max(availableParallelism(), 1),
+    MAX_CONCURRENCY,
+  );
 
-    try {
-      const manifest = await adapter.parseManifests(projectRoot, disc.path);
-      const mod = buildModule(disc, manifest);
-      modules.push(mod);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : 'unknown error';
-      logger.error(
-        { path: disc.path, error: detail },
-        'Manifest parsing failed — skipping module',
-      );
+  return runWithConcurrency(
+    discovered,
+    concurrency,
+    async (disc): Promise<Module | null> => {
+      const adapter = findAdapter(disc, registry);
+      if (!adapter) {
+        logger.warn(
+          { path: disc.path, ecosystem: disc.ecosystem },
+          'No adapter registered — skipping module',
+        );
+        return null;
+      }
+
+      try {
+        const manifest = await adapter.parseManifests(projectRoot, disc.path);
+        return buildModule(disc, manifest);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'unknown error';
+        logger.error(
+          { path: disc.path, error: detail },
+          'Manifest parsing failed — skipping module',
+        );
+        return null;
+      }
+    },
+  );
+}
+
+/**
+ * Run a function over items with limited concurrency.
+ *
+ * Uses a worker pool pattern: N workers pull from a shared index,
+ * collecting non-null results. No external dependencies needed.
+ */
+async function runWithConcurrency<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R | null>,
+): Promise<readonly R[]> {
+  const results: R[] = [];
+  let index = 0;
+
+  async function worker(): Promise<void> {
+    while (index < items.length) {
+      const currentIndex = index++;
+      const item = items[currentIndex]!;
+      try {
+        const result = await fn(item);
+        if (result !== null) {
+          results.push(result);
+        }
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'unknown error';
+        logger.error({ index: currentIndex, error: detail }, 'Worker error');
+      }
     }
   }
 
-  return modules;
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(
+    Array.from({ length: workerCount }, () => worker()),
+  );
+
+  return results;
 }
 
 /**

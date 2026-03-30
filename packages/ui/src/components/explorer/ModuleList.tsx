@@ -7,6 +7,7 @@ import type { ModuleView } from '@deckgraph/shared';
 import { useViewStore } from '@/stores';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EcosystemBadge } from './EcosystemBadge';
+import { VirtualizedModuleList } from './VirtualizedModuleList';
 import { cn } from '@/lib/utils';
 
 type SortField = 'name' | 'ecosystem' | 'deps';
@@ -51,6 +52,24 @@ export function ModuleList() {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
         No modules match the current filters.
+      </div>
+    );
+  }
+
+  // Delegate to virtualized list for large datasets
+  if (sorted.length > 100) {
+    return (
+      <div className="flex flex-col">
+        <div className="flex items-center border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+          <span className="flex-1">Module</span>
+          <span className="w-20">Ecosystem</span>
+          <span className="w-20 text-right">Deps</span>
+        </div>
+        <VirtualizedModuleList
+          modules={sorted}
+          selectedModulePath={selectedModulePath}
+          onSelectModule={selectModule}
+        />
       </div>
     );
   }

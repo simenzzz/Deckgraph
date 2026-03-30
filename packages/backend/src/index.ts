@@ -51,7 +51,18 @@ export function createProgram(): Command {
     .requiredOption('--project <path>', 'Path to the project root')
     .option('--port <number>', 'WebSocket server port', '3333')
     .option('--no-open', 'Skip opening browser')
-    .option('--no-watch', 'Disable file watching');
+    .option('--no-watch', 'Disable file watching')
+    .addHelpText('after', `
+
+Examples:
+  $ deckgraph --project ./my-monorepo          Scan and open in browser
+  $ deckgraph --project ./my-monorepo --no-open  Scan without opening browser
+  $ deckgraph --project ./my-monorepo --port 8080  Use custom port
+  $ deckgraph --project ./my-monorepo --no-watch   Disable file watching
+
+Documentation: https://github.com/deckgraph/deckgraph
+Configuration:  See .deckgraph.yaml in your project root
+`);
 
   return program;
 }

@@ -373,7 +373,7 @@ Note: 2c doesn't strictly need 2b (only needs 2a's WS changes). Can parallelize 
 
 ---
 
-### Phase 3c: Polyrepo Support + Developer Hooks (M)
+### Phase 3c: Polyrepo Support + Developer Hooks (M) [COMPLETE]
 
 **Goal:** Multiple project roots and configurable event hooks.
 
@@ -403,7 +403,7 @@ Phase 2 complete
 
 ---
 
-## Phase 4: Polish & Distribution
+## Phase 4: Polish & Distribution (Complete)
 
 **Strategy:** Fix roughest edges first (error UX), then performance, then expand distribution (VS Code), then docs for external users. 4a and 4c can run in parallel.
 

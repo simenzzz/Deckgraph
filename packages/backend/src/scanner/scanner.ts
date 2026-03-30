@@ -18,6 +18,7 @@ import { tagDependencies } from '../concern/index.js';
 import { detectCrossEdges } from '../crosslang/index.js';
 import { createLogger } from '../logger.js';
 import { buildModules, countDeps } from './helpers.js';
+import { createScanProfiler } from '../profiler/scanProfiler.js';
 
 const logger = createLogger('scanner');
 
@@ -54,19 +55,31 @@ export interface ScanResult {
 export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const { projectRoot } = options;
   const registry = options.registry ?? createDefaultRegistry();
+  const profiler = createScanProfiler();
 
   const config = await loadConfig(projectRoot);
   if (config) {
     logger.info('Config loaded from .deckgraph.yaml');
   }
 
+  profiler.startPhase('discovery');
   const discovered = await discoverModules(projectRoot, config);
+  profiler.endPhase('discovery');
   logger.info({ moduleCount: discovered.length }, 'Modules discovered');
 
+  profiler.startPhase('manifestParsing');
   const rawModules = await buildModules(discovered, projectRoot, registry);
+  profiler.endPhase('manifestParsing');
+
   const taggedModules = tagDependencies(rawModules, config);
+
+  profiler.startPhase('graphBuild');
   const graph = buildGraph(taggedModules);
+  profiler.endPhase('graphBuild');
+
+  profiler.startPhase('crossLang');
   const crossEdges = await detectCrossEdges(projectRoot, taggedModules);
+  profiler.endPhase('crossLang');
 
   const project: Project = {
     root: projectRoot,
@@ -76,11 +89,13 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
     lastScannedAt: new Date().toISOString(),
   };
 
+  const timings = profiler.getTimings();
   logger.info(
     {
       moduleCount: taggedModules.length,
       depCount: countDeps(taggedModules),
       crossEdgeCount: crossEdges.length,
+      ...timings,
     },
     'Scan complete',
   );

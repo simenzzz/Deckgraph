@@ -10,3 +10,5 @@ export {
   type GraphLayoutNode,
   type GraphLayoutEdge,
 } from './graphStore';
+export { useWorkspaceStore } from './workspaceStore';
+export { useNotificationStore, type NotificationItem } from './notificationStore';

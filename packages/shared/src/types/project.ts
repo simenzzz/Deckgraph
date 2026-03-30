@@ -163,3 +163,88 @@ export interface UnifiedGraph {
   /** Cross-language edges */
   readonly crossEdges: readonly CrossEdge[];
 }
+
+// ============================================================================
+// Workspace Types (Polyrepo Support)
+// ============================================================================
+
+/**
+ * Hook event types for developer callbacks.
+ */
+export type HookEventType =
+  | 'on-scan-complete'
+  | 'on-outdated'
+  | 'on-unused'
+  | 'on-license-violation';
+
+/**
+ * A single hook command entry.
+ */
+export interface HookEntry {
+  /** Command to execute (shell command) */
+  readonly cmd: string;
+}
+
+/**
+ * Hook configuration for all event types.
+ */
+export interface HooksConfig {
+  /** Hooks fired after scan completes */
+  readonly onScanComplete: readonly HookEntry[];
+  /** Hooks fired when outdated dependencies detected */
+  readonly onOutdated: readonly HookEntry[];
+  /** Hooks fired when unused dependencies detected */
+  readonly onUnused: readonly HookEntry[];
+  /** Hooks fired when license violations detected */
+  readonly onLicenseViolation: readonly HookEntry[];
+}
+
+/**
+ * Workspace-level configuration extending ProjectConfig.
+ */
+export interface WorkspaceConfig extends ProjectConfig {
+  /** Multiple project roots to scan (polyrepo mode) */
+  readonly roots: readonly string[];
+  /** Developer hook commands for various events */
+  readonly hooks: HooksConfig;
+}
+
+/**
+ * A version of a dependency used in a specific root.
+ */
+export interface CrossRootVersion {
+  /** Absolute path to the project root */
+  readonly projectRoot: string;
+  /** Module path within the project */
+  readonly modulePath: string;
+  /** Version being used */
+  readonly version: string;
+  /** Constraint string from manifest */
+  readonly constraint: string;
+}
+
+/**
+ * A dependency used across multiple roots at different versions (divergence).
+ */
+export interface CrossRootDependency {
+  /** Ecosystem of the package */
+  readonly ecosystem: Ecosystem;
+  /** Package name */
+  readonly packageName: string;
+  /** Versions across different roots */
+  readonly versions: readonly CrossRootVersion[];
+}
+
+/**
+ * Workspace aggregation across multiple project roots.
+ */
+export interface Workspace {
+  /** All scanned projects */
+  readonly projects: readonly Project[];
+  /** Workspace-level config (if any) */
+  readonly config: WorkspaceConfig | null;
+  /** Dependencies used in multiple roots at different versions */
+  readonly crossRootDeps: readonly CrossRootDependency[];
+  /** Timestamp of last workspace scan */
+  readonly lastScannedAt: string;
+}

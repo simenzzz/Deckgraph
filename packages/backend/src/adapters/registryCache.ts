@@ -45,6 +45,12 @@ export interface RegistryCache {
 
   /** Current number of cached entries. */
   readonly size: number;
+
+  /** Get cached metadata for multiple keys. Returns Map of found entries. */
+  getMany(keys: readonly { readonly ecosystem: string; readonly packageName: string }[]): Map<string, RegistryMeta>;
+
+  /** Cache multiple entries at once. */
+  setMany(entries: readonly { readonly ecosystem: string; readonly packageName: string; readonly meta: RegistryMeta }[]): void;
 }
 
 /**
@@ -95,6 +101,25 @@ export function createRegistryCache(options?: RegistryCacheOptions): RegistryCac
 
     get size(): number {
       return cache.size;
+    },
+
+    getMany(keys) {
+      const result = new Map<string, RegistryMeta>();
+      for (const { ecosystem, packageName } of keys) {
+        const key = cacheKey(ecosystem, packageName);
+        const meta = cache.get(key);
+        if (meta) {
+          result.set(key, meta);
+        }
+      }
+      return result;
+    },
+
+    setMany(entries) {
+      for (const { ecosystem, packageName, meta } of entries) {
+        const key = cacheKey(ecosystem, packageName);
+        cache.set(key, meta);
+      }
     },
   };
 }

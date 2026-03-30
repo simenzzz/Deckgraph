@@ -9,11 +9,12 @@
 
 import { z } from 'zod';
 import { packageActionResultSchema, packageBatchOperationSchema } from './actions.js';
-import { dependencySchema, dependencyScopeSchema, ecosystemSchema, moduleSchema, projectSchema } from './project.js';
+import { dependencySchema, dependencyScopeSchema, ecosystemSchema, moduleSchema, projectSchema, workspaceSchema } from './project.js';
 import { viewQuerySchema, viewResultSchema } from './views.js';
 
 import type {
   ScanProjectMessage,
+  ScanWorkspaceMessage,
   ViewQueryMessage,
   AnalyzeImportsMessage,
   EnrichDependencyMessage,
@@ -24,14 +25,17 @@ import type {
   PackageBatchMessage,
   ClientMessage,
   ProjectOverviewMessage,
+  WorkspaceOverviewMessage,
   ViewResultMessage,
   ModuleUpdatedMessage,
   DependencyEnrichedMessage,
   ProgressMessage,
   ErrorMessage,
+  NotificationMessage,
   FileChangeDetectedMessage,
   PackageActionResultMessage,
   PackageBatchResultMessage,
+  ReadyMessage,
   ServerMessage,
 } from '../types/messages.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
@@ -42,6 +46,11 @@ import type { Expect, Mutable } from '../types/typeUtils.js';
 
 export const scanProjectMessageSchema = z.object({
   type: z.literal('scan_project'),
+  requestId: z.string().min(1).max(128),
+});
+
+export const scanWorkspaceMessageSchema = z.object({
+  type: z.literal('scan_workspace'),
   requestId: z.string().min(1).max(128),
 });
 
@@ -104,6 +113,7 @@ export const packageBatchMessageSchema = z.object({
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   scanProjectMessageSchema,
+  scanWorkspaceMessageSchema,
   viewQueryMessageSchema,
   analyzeImportsMessageSchema,
   enrichDependencyMessageSchema,
@@ -122,6 +132,12 @@ export const projectOverviewMessageSchema = z.object({
   type: z.literal('project_overview'),
   requestId: z.string().min(1).max(128),
   data: projectSchema,
+});
+
+export const workspaceOverviewMessageSchema = z.object({
+  type: z.literal('workspace_overview'),
+  requestId: z.string().min(1).max(128),
+  data: workspaceSchema,
 });
 
 export const viewResultMessageSchema = z.object({
@@ -156,6 +172,15 @@ export const errorMessageSchema = z.object({
   suggestion: z.string().min(1).max(2048),
 });
 
+export const notificationMessageSchema = z.object({
+  type: z.literal('notification'),
+  requestId: z.string().min(1).max(128),
+  severity: z.enum(['info', 'warning', 'error']),
+  title: z.string().min(1).max(256),
+  body: z.string().min(1).max(4096),
+  timestamp: z.string().min(1).max(64),
+});
+
 export const fileChangeDetectedMessageSchema = z.object({
   type: z.literal('file_change_detected'),
   requestId: z.string().min(1).max(128),
@@ -178,16 +203,26 @@ export const packageBatchResultMessageSchema = z.object({
   stoppedEarly: z.boolean(),
 });
 
+export const readyMessageSchema = z.object({
+  type: z.literal('ready'),
+  requestId: z.string().min(1).max(128),
+  configPresent: z.boolean(),
+  hasScannedData: z.boolean(),
+});
+
 export const serverMessageSchema = z.discriminatedUnion('type', [
   projectOverviewMessageSchema,
+  workspaceOverviewMessageSchema,
   viewResultMessageSchema,
   moduleUpdatedMessageSchema,
   dependencyEnrichedMessageSchema,
   progressMessageSchema,
   errorMessageSchema,
+  notificationMessageSchema,
   fileChangeDetectedMessageSchema,
   packageActionResultMessageSchema,
   packageBatchResultMessageSchema,
+  readyMessageSchema,
 ]);
 
 // ============================================================================
@@ -196,6 +231,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
 
 export const parseClientMessage = (value: unknown) => clientMessageSchema.parse(value);
 export const parseScanProjectMessage = (value: unknown) => scanProjectMessageSchema.parse(value);
+export const parseScanWorkspaceMessage = (value: unknown) => scanWorkspaceMessageSchema.parse(value);
 export const parseViewQueryMessage = (value: unknown) => viewQueryMessageSchema.parse(value);
 export const parseAnalyzeImportsMessage = (value: unknown) =>
   analyzeImportsMessageSchema.parse(value);
@@ -206,6 +242,8 @@ export const parseSyncMessage = (value: unknown) => syncMessageSchema.parse(valu
 export const parseServerMessage = (value: unknown) => serverMessageSchema.parse(value);
 export const parseProjectOverviewMessage = (value: unknown) =>
   projectOverviewMessageSchema.parse(value);
+export const parseWorkspaceOverviewMessage = (value: unknown) =>
+  workspaceOverviewMessageSchema.parse(value);
 export const parseViewResultMessage = (value: unknown) => viewResultMessageSchema.parse(value);
 export const parseModuleUpdatedMessage = (value: unknown) =>
   moduleUpdatedMessageSchema.parse(value);
@@ -213,6 +251,7 @@ export const parseDependencyEnrichedMessage = (value: unknown) =>
   dependencyEnrichedMessageSchema.parse(value);
 export const parseProgressMessage = (value: unknown) => progressMessageSchema.parse(value);
 export const parseErrorMessage = (value: unknown) => errorMessageSchema.parse(value);
+export const parseNotificationMessage = (value: unknown) => notificationMessageSchema.parse(value);
 export const parseFileChangeDetectedMessage = (value: unknown) =>
   fileChangeDetectedMessageSchema.parse(value);
 export const parsePackageUpdateMessage = (value: unknown) =>
@@ -228,6 +267,8 @@ export const parsePackageActionResultMessage = (value: unknown) =>
 export const parsePackageBatchResultMessage = (value: unknown) =>
   packageBatchResultMessageSchema.parse(value);
 
+export const parseReadyMessage = (value: unknown) => readyMessageSchema.parse(value);
+
 // ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
 // ============================================================================
@@ -237,6 +278,7 @@ export const parsePackageBatchResultMessage = (value: unknown) =>
 export type _MessageSchemaAssertions = [
   // Forward direction: ZodOutput ⊆ Interface
   Expect<z.infer<typeof scanProjectMessageSchema> extends ScanProjectMessage ? true : false>,
+  Expect<z.infer<typeof scanWorkspaceMessageSchema> extends ScanWorkspaceMessage ? true : false>,
   Expect<z.infer<typeof viewQueryMessageSchema> extends ViewQueryMessage ? true : false>,
   Expect<z.infer<typeof analyzeImportsMessageSchema> extends AnalyzeImportsMessage ? true : false>,
   Expect<
@@ -247,6 +289,9 @@ export type _MessageSchemaAssertions = [
   Expect<
     z.infer<typeof projectOverviewMessageSchema> extends ProjectOverviewMessage ? true : false
   >,
+  Expect<
+    z.infer<typeof workspaceOverviewMessageSchema> extends WorkspaceOverviewMessage ? true : false
+  >,
   Expect<z.infer<typeof viewResultMessageSchema> extends ViewResultMessage ? true : false>,
   Expect<z.infer<typeof moduleUpdatedMessageSchema> extends ModuleUpdatedMessage ? true : false>,
   Expect<
@@ -256,6 +301,7 @@ export type _MessageSchemaAssertions = [
   >,
   Expect<z.infer<typeof progressMessageSchema> extends ProgressMessage ? true : false>,
   Expect<z.infer<typeof errorMessageSchema> extends ErrorMessage ? true : false>,
+  Expect<z.infer<typeof notificationMessageSchema> extends NotificationMessage ? true : false>,
   Expect<
     z.infer<typeof fileChangeDetectedMessageSchema> extends FileChangeDetectedMessage ? true : false
   >,
@@ -277,6 +323,7 @@ export type _MessageSchemaAssertions = [
 
   // Reverse direction: Interface ⊆ ZodOutput
   Expect<Mutable<ScanProjectMessage> extends z.infer<typeof scanProjectMessageSchema> ? true : false>,
+  Expect<Mutable<ScanWorkspaceMessage> extends z.infer<typeof scanWorkspaceMessageSchema> ? true : false>,
   Expect<Mutable<ViewQueryMessage> extends z.infer<typeof viewQueryMessageSchema> ? true : false>,
   Expect<Mutable<AnalyzeImportsMessage> extends z.infer<typeof analyzeImportsMessageSchema> ? true : false>,
   Expect<
@@ -291,6 +338,11 @@ export type _MessageSchemaAssertions = [
       ? true
       : false
   >,
+  Expect<
+    Mutable<WorkspaceOverviewMessage> extends z.infer<typeof workspaceOverviewMessageSchema>
+      ? true
+      : false
+  >,
   Expect<Mutable<ViewResultMessage> extends z.infer<typeof viewResultMessageSchema> ? true : false>,
   Expect<Mutable<ModuleUpdatedMessage> extends z.infer<typeof moduleUpdatedMessageSchema> ? true : false>,
   Expect<
@@ -300,6 +352,7 @@ export type _MessageSchemaAssertions = [
   >,
   Expect<Mutable<ProgressMessage> extends z.infer<typeof progressMessageSchema> ? true : false>,
   Expect<Mutable<ErrorMessage> extends z.infer<typeof errorMessageSchema> ? true : false>,
+  Expect<Mutable<NotificationMessage> extends z.infer<typeof notificationMessageSchema> ? true : false>,
   Expect<
     Mutable<FileChangeDetectedMessage> extends z.infer<typeof fileChangeDetectedMessageSchema>
       ? true
@@ -320,4 +373,8 @@ export type _MessageSchemaAssertions = [
       ? true
       : false
   >,
+
+  // ReadyMessage
+  Expect<z.infer<typeof readyMessageSchema> extends ReadyMessage ? true : false>,
+  Expect<Mutable<ReadyMessage> extends z.infer<typeof readyMessageSchema> ? true : false>,
 ];

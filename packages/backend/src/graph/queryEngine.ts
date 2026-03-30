@@ -27,6 +27,13 @@ const DEFAULT_CROSS_EDGE_TYPES: readonly CrossEdgeType[] = ['proto', 'ffi', 'ope
 const SEARCH_THRESHOLD = 0.4;
 
 /**
+ * WeakMap-based summary cache for unfiltered queries.
+ * Keyed on the graph reference — auto-invalidated when graph is replaced
+ * after incremental scan. Only caches summaries for empty queries.
+ */
+const summaryCache = new WeakMap<UnifiedGraph, ViewSummary>();
+
+/**
  * Execute a view query against the unified graph.
  *
  * Pipeline:
@@ -38,6 +45,27 @@ const SEARCH_THRESHOLD = 0.4;
  */
 export function executeQuery(graph: UnifiedGraph, query: ViewQuery): ViewResult {
   const hasDepFilters = hasActiveDependencyFilters(query);
+  const isUnfiltered = !hasDepFilters && !query.ecosystems && !query.modules;
+
+  // For unfiltered queries, try the WeakMap summary cache
+  if (isUnfiltered) {
+    const cached = summaryCache.get(graph);
+    if (cached) {
+      // Rebuild moduleViews and crossEdges (cheap) but reuse cached summary
+      const moduleViews = buildAllModuleViews(graph);
+      const filteredCrossEdges = filterCrossEdges(
+        graph.crossEdges,
+        moduleViews,
+        query,
+      );
+      return {
+        modules: moduleViews,
+        crossEdges: filteredCrossEdges,
+        summary: cached,
+      };
+    }
+  }
+
   const moduleViews: ModuleView[] = [];
 
   for (const [, module] of graph.modules) {
@@ -66,11 +94,35 @@ export function executeQuery(graph: UnifiedGraph, query: ViewQuery): ViewResult 
 
   const summary = buildSummary(moduleViews, filteredCrossEdges);
 
+  // Cache summary for unfiltered queries
+  if (isUnfiltered) {
+    summaryCache.set(graph, summary);
+  }
+
   return {
     modules: moduleViews,
     crossEdges: filteredCrossEdges,
     summary,
   };
+}
+
+/**
+ * Build module views for all modules (no filtering).
+ * Used when serving cached summary for unfiltered queries.
+ */
+function buildAllModuleViews(graph: UnifiedGraph): ModuleView[] {
+  const moduleViews: ModuleView[] = [];
+  for (const [, module] of graph.modules) {
+    moduleViews.push({
+      path: module.path,
+      name: module.name,
+      ecosystem: module.ecosystem,
+      analysisState: module.analysisState,
+      dependencies: module.dependencies,
+      totalDependencyCount: module.dependencies.length,
+    });
+  }
+  return moduleViews;
 }
 
 /**

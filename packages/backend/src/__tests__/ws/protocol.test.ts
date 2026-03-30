@@ -140,7 +140,7 @@ describe('handleMessage', () => {
       expect(result.type).toBe('error');
       const error = result as ErrorMessage;
       expect(error.requestId).toBe('unknown');
-      expect(error.suggestion).toContain('scan_project');
+      expect(error.message).toContain('scan_project');
     });
 
     it('returns error for Zod validation failure', async () => {
