@@ -14,7 +14,7 @@ export class DeckgraphWebviewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
 
   constructor(
-    private readonly context: vscode.ExtensionContext,
+    _context: vscode.ExtensionContext,
     private readonly getWsUrl: () => string,
   ) {}
 

@@ -8,7 +8,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { ModuleView, ServerMessage, Ecosystem } from '@deckgraph/shared';
+import type { ModuleView, Ecosystem } from '@deckgraph/shared';
 
 const ECOSYSTEM_ICONS: Record<Ecosystem, string> = {
   npm: 'package',

@@ -6,7 +6,7 @@
  */
 
 import * as vscode from 'vscode';
-import type { ServerMessage, ViewResult } from '@deckgraph/shared';
+import type { ViewResult } from '@deckgraph/shared';
 
 const MANIFEST_PATTERNS = [
   /package\.json$/,
