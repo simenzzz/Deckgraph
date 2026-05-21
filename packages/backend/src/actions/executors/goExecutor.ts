@@ -5,8 +5,6 @@
  * for removal.
  */
 
-import { execa } from 'execa';
-
 import type { PackageActionResult } from '@deckgraph/shared';
 import type {
   EcosystemExecutor,
@@ -15,27 +13,10 @@ import type {
   RemoveOptions,
   UpdateOptions,
 } from '../types.js';
-
-const SUBPROCESS_TIMEOUT_MS = 60_000;
+import { runCommand } from './runCommand.js';
 
 function formatCommand(args: readonly string[]): string {
   return `go ${args.join(' ')}`;
-}
-
-async function runCommand(
-  args: readonly string[],
-  cwd: string,
-): Promise<{ success: boolean; stderr: string }> {
-  try {
-    await execa('go', args, { cwd, timeout: SUBPROCESS_TIMEOUT_MS });
-    return { success: true, stderr: '' };
-  } catch (error: unknown) {
-    const stderr =
-      error !== null && typeof error === 'object' && 'stderr' in error
-        ? String(error.stderr)
-        : String(error);
-    return { success: false, stderr };
-  }
 }
 
 export function createGoExecutor(): EcosystemExecutor {
@@ -45,7 +26,7 @@ export function createGoExecutor(): EcosystemExecutor {
     async update(ctx: ExecutorContext, options: UpdateOptions): Promise<PackageActionResult> {
       const args = ['get', `${options.packageName}@v${options.targetVersion}`];
       const command = formatCommand(args);
-      const { success, stderr } = await runCommand(args, ctx.cwd);
+      const { success, stderr } = await runCommand('go', args, ctx.cwd);
 
       return {
         action: 'update',
@@ -64,7 +45,7 @@ export function createGoExecutor(): EcosystemExecutor {
       const version = options.version ? `@v${options.version}` : '@latest';
       const args = ['get', `${options.packageName}${version}`];
       const command = formatCommand(args);
-      const { success, stderr } = await runCommand(args, ctx.cwd);
+      const { success, stderr } = await runCommand('go', args, ctx.cwd);
 
       return {
         action: 'install',
@@ -84,7 +65,7 @@ export function createGoExecutor(): EcosystemExecutor {
       const dropArgs = ['mod', 'edit', '-droprequire', options.packageName];
       const command = `${formatCommand(dropArgs)} && go mod tidy`;
 
-      const dropResult = await runCommand(dropArgs, ctx.cwd);
+      const dropResult = await runCommand('go', dropArgs, ctx.cwd);
       if (!dropResult.success) {
         return {
           action: 'remove',
@@ -99,7 +80,7 @@ export function createGoExecutor(): EcosystemExecutor {
         };
       }
 
-      const tidyResult = await runCommand(['mod', 'tidy'], ctx.cwd);
+      const tidyResult = await runCommand('go', ['mod', 'tidy'], ctx.cwd);
 
       return {
         action: 'remove',

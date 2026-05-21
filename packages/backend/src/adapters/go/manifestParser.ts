@@ -7,7 +7,6 @@
 
 import { readFile } from 'node:fs/promises';
 import { join, basename } from 'node:path';
-import { z } from 'zod';
 import type { ManifestResult, MinimalDependency } from '@deckgraph/shared';
 import { parseManifestResult } from '@deckgraph/shared';
 import { createLogger } from '../../logger.js';
@@ -15,17 +14,11 @@ import { readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('go-manifest-parser');
 
-// ============================================================================
-// Internal Zod Schemas
-// ============================================================================
-
-const goModRequireSchema = z.object({
-  path: z.string().min(1),
-  version: z.string().min(1),
-  indirect: z.boolean(),
-});
-
-type GoModRequire = z.infer<typeof goModRequireSchema>;
+interface GoModRequire {
+  readonly path: string;
+  readonly version: string;
+  readonly indirect: boolean;
+}
 
 // ============================================================================
 // Lock File Types

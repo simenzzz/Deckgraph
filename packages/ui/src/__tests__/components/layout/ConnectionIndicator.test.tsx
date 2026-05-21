@@ -5,7 +5,15 @@ import { useConnectionStore } from '@/stores/connectionStore';
 
 describe('ConnectionIndicator', () => {
   beforeEach(() => {
-    useConnectionStore.setState({ status: 'disconnected', lastError: null });
+    useConnectionStore.setState({
+      status: 'disconnected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: null,
+      hasScannedData: null,
+      demoMode: false,
+      demoRepositories: [],
+    });
   });
 
   it('shows Disconnected when disconnected', () => {

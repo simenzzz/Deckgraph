@@ -6,6 +6,11 @@ describe('connectionStore', () => {
     useConnectionStore.setState({
       status: 'disconnected',
       lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: null,
+      hasScannedData: null,
+      demoMode: false,
+      demoRepositories: [],
     });
   });
 
@@ -19,8 +24,9 @@ describe('connectionStore', () => {
   });
 
   it('setError sets lastError', () => {
-    useConnectionStore.getState().setError('Connection failed');
+    useConnectionStore.getState().setError('Connection failed', 'Try again');
     expect(useConnectionStore.getState().lastError).toBe('Connection failed');
+    expect(useConnectionStore.getState().lastErrorSuggestion).toBe('Try again');
   });
 
   it('clearError clears lastError', () => {

@@ -12,7 +12,7 @@ import { ModuleExplorer } from '@/components/explorer';
 import { HealthReport } from '@/components/health';
 import { CrossLanguageGraph } from '@/components/crosslang';
 import { ErrorBoundary } from '@/components/errors';
-import { useConnectionStore, useViewStore } from '@/stores';
+import { useConnectionStore, useProjectStore, useViewStore } from '@/stores';
 import { createWsClient, getWsUrl, type WsClient } from '@/lib/wsClient';
 import { dispatchServerMessage } from '@/lib/messageDispatcher';
 import { useViewQuery } from '@/hooks';
@@ -28,6 +28,11 @@ export function App() {
       onMessage: dispatchServerMessage,
       onStatusChange: (status) => {
         useConnectionStore.getState().setStatus(status);
+        // Clear loading state when connection is lost to prevent frozen spinners
+        if (status === 'disconnected' || status === 'reconnecting') {
+          useViewStore.getState().setLoading(false);
+          useProjectStore.getState().clearScanProgress();
+        }
       },
     });
 

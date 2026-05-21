@@ -10,6 +10,7 @@ import { useConnectionStore } from '@/stores/connectionStore';
 import { useDetailStore } from '@/stores/detailStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useViewStore } from '@/stores/viewStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 
 const mockProject: Project = {
   root: '/test',
@@ -35,9 +36,25 @@ const mockViewResult: ViewResult = {
 
 describe('dispatchServerMessage', () => {
   beforeEach(() => {
-    useConnectionStore.setState({ status: 'connected', lastError: null });
+    useConnectionStore.setState({
+      status: 'connected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: null,
+      hasScannedData: null,
+      demoMode: false,
+      demoRepositories: [],
+    });
     useProjectStore.setState({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false });
     useViewStore.setState({ result: null, isLoading: false, selectedModulePath: null, currentView: 'overview' });
+    useWorkspaceStore.setState({ workspace: null, activeProjectRoot: null });
+    useDetailStore.setState({ selectedDep: null, isEnriching: false });
+    useActionStore.setState({
+      inProgress: new Map(),
+      lastResult: null,
+      batchResults: [],
+      isBatchRunning: false,
+    });
   });
 
   it('dispatches project_overview to projectStore', () => {
@@ -267,5 +284,44 @@ describe('dispatchServerMessage', () => {
     dispatchServerMessage(msg);
     expect(useActionStore.getState().isBatchRunning).toBe(false);
     expect(useActionStore.getState().batchResults).toHaveLength(1);
+  });
+
+  it('ready without scan data clears stale session state', () => {
+    useProjectStore.getState().setProject(mockProject);
+    useViewStore.setState({
+      result: mockViewResult,
+      isLoading: true,
+      selectedModulePath: 'pkg/a',
+      currentView: 'explorer',
+    });
+    useWorkspaceStore.setState({
+      workspace: {
+        root: '/workspace',
+        config: null,
+        projects: [mockProject],
+        crossRootDeps: [],
+        lastScannedAt: '2024-01-01T00:00:00.000Z',
+      },
+      activeProjectRoot: '/test',
+    });
+    useDetailStore.setState({ selectedDep: { name: 'react', ecosystem: 'npm' }, isEnriching: true });
+    useActionStore.getState().startAction('pkg/a', 'req-1');
+
+    dispatchServerMessage({
+      type: 'ready',
+      requestId: 'ready-1',
+      configPresent: true,
+      hasScannedData: false,
+      demoMode: true,
+      demoRepositories: [],
+    });
+
+    expect(useConnectionStore.getState().demoMode).toBe(true);
+    expect(useProjectStore.getState().project).toBeNull();
+    expect(useWorkspaceStore.getState().workspace).toBeNull();
+    expect(useViewStore.getState().result).toBeNull();
+    expect(useViewStore.getState().currentView).toBe('overview');
+    expect(useDetailStore.getState().selectedDep).toBeNull();
+    expect(useActionStore.getState().inProgress.size).toBe(0);
   });
 });

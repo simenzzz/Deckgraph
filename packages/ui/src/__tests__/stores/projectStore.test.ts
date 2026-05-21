@@ -25,6 +25,7 @@ describe('projectStore', () => {
       project: null,
       isScanning: false,
       lastProgress: null,
+      fileChangeInProgress: false,
     });
   });
 
@@ -88,5 +89,27 @@ describe('projectStore', () => {
     expect(state.project).toBeNull();
     expect(state.isScanning).toBe(false);
     expect(state.lastProgress).toBeNull();
+  });
+
+  it('clearScanProgress preserves project and clears transient scan state', () => {
+    useProjectStore.getState().setProject(mockProject);
+    useProjectStore.setState({
+      isScanning: true,
+      lastProgress: {
+        type: 'progress',
+        requestId: 'r1',
+        message: 'Scanning...',
+        phase: 0,
+      },
+      fileChangeInProgress: true,
+    });
+
+    useProjectStore.getState().clearScanProgress();
+
+    const state = useProjectStore.getState();
+    expect(state.project).toEqual(mockProject);
+    expect(state.isScanning).toBe(false);
+    expect(state.lastProgress).toBeNull();
+    expect(state.fileChangeInProgress).toBe(false);
   });
 });

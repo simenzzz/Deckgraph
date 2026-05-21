@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import type { Dependency, ModuleView } from '@deckgraph/shared';
-import { useViewStore, useDetailStore } from '@/stores';
+import { useViewStore, useDetailStore, useConnectionStore } from '@/stores';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScopeBadge } from './ScopeBadge';
@@ -24,6 +24,7 @@ interface DependencyListProps {
 export function DependencyList({ wsClient }: DependencyListProps) {
   const result = useViewStore((s) => s.result);
   const selectedModulePath = useViewStore((s) => s.selectedModulePath);
+  const demoMode = useConnectionStore((s) => s.demoMode);
 
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -88,14 +89,16 @@ export function DependencyList({ wsClient }: DependencyListProps) {
               {deps.length} dep{deps.length !== 1 ? 's' : ''}
             </span>
           </h3>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setInstallDialogOpen(true)}
-            data-testid="install-package-button"
-          >
-            Install Package
-          </Button>
+          {!demoMode && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setInstallDialogOpen(true)}
+              data-testid="install-package-button"
+            >
+              Install Package
+            </Button>
+          )}
         </div>
         <VirtualizedDependencyList
           deps={sorted}
@@ -105,14 +108,16 @@ export function DependencyList({ wsClient }: DependencyListProps) {
           sortDir={sortDir}
           onToggleSort={toggleSort}
         />
-        <InstallDialog
-          open={installDialogOpen}
-          onOpenChange={setInstallDialogOpen}
-          modulePath={selectedModule.path}
-          moduleName={selectedModule.name}
-          moduleEcosystem={selectedModule.ecosystem}
-          wsClient={wsClient}
-        />
+        {!demoMode && (
+          <InstallDialog
+            open={installDialogOpen}
+            onOpenChange={setInstallDialogOpen}
+            modulePath={selectedModule.path}
+            moduleName={selectedModule.name}
+            moduleEcosystem={selectedModule.ecosystem}
+            wsClient={wsClient}
+          />
+        )}
       </div>
     );
   }
@@ -126,14 +131,16 @@ export function DependencyList({ wsClient }: DependencyListProps) {
             {deps.length} dep{deps.length !== 1 ? 's' : ''}
           </span>
         </h3>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setInstallDialogOpen(true)}
-          data-testid="install-package-button"
-        >
-          Install Package
-        </Button>
+        {!demoMode && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setInstallDialogOpen(true)}
+            data-testid="install-package-button"
+          >
+            Install Package
+          </Button>
+        )}
       </div>
       <Table>
         <TableHeader>
@@ -164,14 +171,16 @@ export function DependencyList({ wsClient }: DependencyListProps) {
         </TableBody>
       </Table>
 
-      <InstallDialog
-        open={installDialogOpen}
-        onOpenChange={setInstallDialogOpen}
-        modulePath={selectedModule.path}
-        moduleName={selectedModule.name}
-        moduleEcosystem={selectedModule.ecosystem}
-        wsClient={wsClient}
-      />
+      {!demoMode && (
+        <InstallDialog
+          open={installDialogOpen}
+          onOpenChange={setInstallDialogOpen}
+          modulePath={selectedModule.path}
+          moduleName={selectedModule.name}
+          moduleEcosystem={selectedModule.ecosystem}
+          wsClient={wsClient}
+        />
+      )}
     </div>
   );
 }

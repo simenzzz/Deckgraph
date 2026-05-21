@@ -11,7 +11,7 @@ import type { Server as HttpServer } from 'node:http';
 import { WebSocketServer } from 'ws';
 import type WebSocket from 'ws';
 import { randomUUID } from 'node:crypto';
-import type { ServerMessage, FileChangeDetectedMessage, ProjectOverviewMessage, ReadyMessage } from '@deckgraph/shared';
+import type { DemoRepository, ServerMessage, FileChangeDetectedMessage, ProjectOverviewMessage, ReadyMessage } from '@deckgraph/shared';
 import { createLogger } from '../logger.js';
 import { createExecutorRegistry } from '../actions/executors/index.js';
 import { createDefaultRegistry } from '../adapters/index.js';
@@ -43,6 +43,12 @@ export interface ServerOptions {
   readonly uiDistPath?: string;
   /** Disable file watching (default: false) */
   readonly noWatch?: boolean;
+  /** Hosted demo mode scans cloned curated repositories per browser connection */
+  readonly demoMode?: boolean;
+  /** Curated repositories available when demo mode is enabled */
+  readonly demoRepositories?: readonly DemoRepository[];
+  /** Cache directory for cloned demo repositories */
+  readonly demoCacheDir?: string;
 }
 
 /**
@@ -71,6 +77,7 @@ export interface DeckgraphServer {
 export function createServer(options: ServerOptions): DeckgraphServer {
   const port = options.port ?? 3333;
   const host = options.host ?? '127.0.0.1';
+  const demoMode = options.demoMode ?? false;
 
   const registryCache = createRegistryCache();
   const rateLimiter = createRegistryRateLimiter();
@@ -89,6 +96,9 @@ export function createServer(options: ServerOptions): DeckgraphServer {
     rateLimiter,
     executorRegistry: createExecutorRegistry(),
     moduleActionLocks: new Map(),
+    demoMode,
+    demoRepositories: options.demoRepositories ?? [],
+    demoCacheDir: options.demoCacheDir ?? '/tmp/deckgraph-demo-cache',
   };
 
   const clients = new Set<ClientConnection>();
@@ -150,7 +160,13 @@ export function createServer(options: ServerOptions): DeckgraphServer {
   function onConnection(ws: WebSocket): void {
     clientCounter++;
     const clientId = `client-${clientCounter}`;
-    const connection: ClientConnection = { ws, clientId };
+    const connection: ClientConnection = {
+      ws,
+      clientId,
+      scanResult: null,
+      projectRoot: null,
+      demoImportRequestId: null,
+    };
 
     clients.add(connection);
     logger.info({ clientId }, 'Client connected');
@@ -169,7 +185,9 @@ export function createServer(options: ServerOptions): DeckgraphServer {
           type: 'ready',
           requestId: randomUUID(),
           configPresent,
-          hasScannedData: state.scanResult !== null,
+          hasScannedData: demoMode ? connection.scanResult !== null : state.scanResult !== null,
+          demoMode,
+          demoRepositories: state.demoRepositories,
         };
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify(ready));
@@ -243,7 +261,7 @@ export function createServer(options: ServerOptions): DeckgraphServer {
         httpServer.listen(port, host, () => {
           logger.info({ host, port }, 'Server listening');
 
-          if (!options.noWatch) {
+          if (!options.noWatch && !demoMode) {
             const watcher = createFileWatcher({
               projectRoot: options.projectRoot,
               modules: state.scanResult?.project.modules ?? [],

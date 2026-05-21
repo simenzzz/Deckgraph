@@ -28,6 +28,7 @@ export type {
   CrossRootDependency,
   Workspace,
   HookEventType,
+  DemoRepository,
 } from './types/project.js';
 
 // ============================================================================
@@ -67,6 +68,7 @@ export type {
 export type {
   ClientMessage,
   ScanProjectMessage,
+  ImportDemoRepoMessage,
   ScanWorkspaceMessage,
   ViewQueryMessage,
   AnalyzeImportsMessage,
@@ -113,6 +115,7 @@ export {
   crossRootVersionSchema,
   crossRootDependencySchema,
   workspaceSchema,
+  demoRepositorySchema,
   parseEcosystem,
   parseAnalysisState,
   parseDependencyScope,
@@ -129,6 +132,7 @@ export {
   parseCrossRootVersion,
   parseCrossRootDependency,
   parseWorkspace,
+  parseDemoRepository,
 } from './schemas/project.js';
 
 // ============================================================================
@@ -185,6 +189,7 @@ export { classifyOutdated } from './analysis/outdated.js';
 
 export {
   scanProjectMessageSchema,
+  importDemoRepoMessageSchema,
   scanWorkspaceMessageSchema,
   viewQueryMessageSchema,
   analyzeImportsMessageSchema,
@@ -202,6 +207,7 @@ export {
   serverMessageSchema,
   parseClientMessage,
   parseScanProjectMessage,
+  parseImportDemoRepoMessage,
   parseScanWorkspaceMessage,
   parseViewQueryMessage,
   parseAnalyzeImportsMessage,

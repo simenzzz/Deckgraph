@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { WsClient } from '@/lib/wsClient';
+import { isRelevantResult } from '@/lib/actionUtils';
 
 const SCOPE_OPTIONS: readonly DependencyScope[] = [
   'runtime',
@@ -54,10 +55,7 @@ export function InstallDialog({
   const { isInstalling, lastResult, install, clearResult } =
     usePackageInstall(modulePath, wsClient);
 
-  const isRelevantResult =
-    lastResult &&
-    lastResult.packageName === packageName &&
-    lastResult.action === 'install';
+  const relevant = isRelevantResult(lastResult, 'install', packageName, modulePath);
 
   const resetForm = useCallback(() => {
     setPackageName('');
@@ -66,7 +64,7 @@ export function InstallDialog({
   }, []);
 
   const handleClose = () => {
-    if (isRelevantResult) {
+    if (relevant) {
       clearResult();
     }
     resetForm();
@@ -156,14 +154,14 @@ export function InstallDialog({
             </div>
           )}
 
-          {isRelevantResult && <ActionResultDisplay result={lastResult} actionLabel="Install" testId="install-result" />}
+          {relevant && <ActionResultDisplay result={lastResult} actionLabel="Install" testId="install-result" />}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={handleClose} disabled={isInstalling}>
-            {isRelevantResult ? 'Close' : 'Cancel'}
+            {relevant ? 'Close' : 'Cancel'}
           </Button>
-          {!isRelevantResult && (
+          {!relevant && (
             <Button
               onClick={handleConfirm}
               disabled={isInstalling || !packageName.trim()}

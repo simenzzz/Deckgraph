@@ -5,7 +5,7 @@
  * CLI command that will be executed. Shows progress and results.
  */
 
-import type { Dependency } from '@deckgraph/shared';
+import type { Dependency, PackageActionResult } from '@deckgraph/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ActionResultDisplay } from '@/components/shared/ActionResultDisplay';
@@ -17,6 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { isRelevantResult } from '@/lib/actionUtils';
 
 interface UpdateConfirmationProps {
   readonly open: boolean;
@@ -41,13 +42,10 @@ export function UpdateConfirmation({
   onConfirm,
   onClearResult,
 }: UpdateConfirmationProps) {
-  const isRelevantResult =
-    lastResult &&
-    lastResult.packageName === dependency.name &&
-    lastResult.action === 'update';
+  const relevant = isRelevantResult(lastResult, 'update', dependency.name, modulePath);
 
   const handleClose = () => {
-    if (isRelevantResult) {
+    if (relevant) {
       onClearResult();
     }
     onOpenChange(false);
@@ -87,16 +85,16 @@ export function UpdateConfirmation({
             </div>
           )}
 
-          {isRelevantResult && (
+          {relevant && (
             <ActionResultDisplay result={lastResult} actionLabel="Update" testId="update-result" />
           )}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={handleClose} disabled={isUpdating}>
-            {isRelevantResult ? 'Close' : 'Cancel'}
+            {relevant ? 'Close' : 'Cancel'}
           </Button>
-          {!isRelevantResult && (
+          {!relevant && (
             <Button onClick={onConfirm} disabled={isUpdating} data-testid="confirm-update">
               {isUpdating ? 'Updating...' : 'Confirm Update'}
             </Button>

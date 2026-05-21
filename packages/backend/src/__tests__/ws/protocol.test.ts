@@ -23,19 +23,28 @@ vi.mock('../../analysis/importResolver.js', () => ({
   resolveImports: vi.fn(),
 }));
 
+vi.mock('../../ws/demoRepository.js', () => ({
+  importDemoRepository: vi.fn(),
+}));
+
 import { scanProject } from '../../scanner/scanner.js';
 import { executeQuery } from '../../graph/queryEngine.js';
 import { resolveImports } from '../../analysis/importResolver.js';
+import { importDemoRepository } from '../../ws/demoRepository.js';
 import { handleMessage } from '../../ws/protocol.js';
 
 const mockScanProject = vi.mocked(scanProject);
 const mockExecuteQuery = vi.mocked(executeQuery);
 const mockResolveImports = vi.mocked(resolveImports);
+const mockImportDemoRepository = vi.mocked(importDemoRepository);
 
 function createMockConnection(): ClientConnection {
   return {
     ws: {} as import('ws').WebSocket,
     clientId: 'test-client',
+    scanResult: null,
+    projectRoot: null,
+    demoImportRequestId: null,
   };
 }
 
@@ -48,14 +57,23 @@ function createMockState(overrides: Partial<ServerState> = {}): ServerState {
     packageMap: createImportPackageMap(),
     registryCache: createRegistryCache({ maxSize: 10, ttlMs: 60_000 }),
     rateLimiter: createRegistryRateLimiter(),
+    fileWatcher: null,
+    fileWatchers: new Map(),
+    workspaceScanResult: null,
+    workspaceConfig: null,
+    executorRegistry: new Map(),
+    moduleActionLocks: new Map(),
+    demoMode: false,
+    demoRepositories: [],
+    demoCacheDir: '/tmp/deckgraph-demo-cache',
     ...overrides,
   };
 }
 
-function createMockScanResult(): ScanResult {
+function createMockScanResult(root = '/test/project'): ScanResult {
   return {
     project: {
-      root: '/test/project',
+      root,
       config: null,
       modules: [
         {
@@ -232,6 +250,161 @@ describe('handleMessage', () => {
 
       expect(result.message).not.toContain('ENOENT');
       expect(result.message).not.toContain('stack');
+    });
+  });
+
+  // ========== import_demo_repo ==========
+
+  describe('import_demo_repo', () => {
+    it('imports a curated repository and stores scan data on the connection', async () => {
+      const scanResult = createMockScanResult();
+      const state = createMockState({
+        demoMode: true,
+        demoRepositories: [{
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'Fixture repo',
+        }],
+      });
+
+      mockImportDemoRepository.mockResolvedValue({
+        repository: state.demoRepositories[0]!,
+        path: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+      });
+      mockScanProject.mockResolvedValue(scanResult);
+
+      const raw = JSON.stringify({
+        type: 'import_demo_repo',
+        requestId: 'demo-1',
+        repoId: 'deckgraph-fixture',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('project_overview');
+      expect(mockImportDemoRepository).toHaveBeenCalledWith({
+        repoId: 'deckgraph-fixture',
+        repositories: state.demoRepositories,
+        cacheDir: '/tmp/deckgraph-demo-cache',
+      });
+      expect(mockScanProject).toHaveBeenCalledWith({
+        projectRoot: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+      });
+      expect(connection.scanResult).toBe(scanResult);
+      expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/deckgraph-fixture');
+      expect(connection.demoImportRequestId).toBeNull();
+      expect(state.scanResult).toBeNull();
+    });
+
+    it('preserves previous demo state and sanitizes errors when scan fails', async () => {
+      const previousScan = createMockScanResult('/tmp/deckgraph-demo-cache/old');
+      connection.scanResult = previousScan;
+      connection.projectRoot = '/tmp/deckgraph-demo-cache/old';
+
+      const state = createMockState({
+        demoMode: true,
+        demoRepositories: [{
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'Fixture repo',
+        }],
+      });
+
+      mockImportDemoRepository.mockResolvedValue({
+        repository: state.demoRepositories[0]!,
+        path: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+      });
+      mockScanProject.mockRejectedValue(new Error('/tmp/deckgraph-demo-cache/deckgraph-fixture failed'));
+
+      const raw = JSON.stringify({
+        type: 'import_demo_repo',
+        requestId: 'demo-fail',
+        repoId: 'deckgraph-fixture',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toBe('Demo repository unavailable');
+      expect(error.message).not.toContain('/tmp');
+      expect(connection.scanResult).toBe(previousScan);
+      expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/old');
+      expect(connection.demoImportRequestId).toBeNull();
+    });
+
+    it('rejects overlapping demo imports for the same connection', async () => {
+      connection.demoImportRequestId = 'demo-running';
+      const state = createMockState({
+        demoMode: true,
+        demoRepositories: [{
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'Fixture repo',
+        }],
+      });
+
+      const raw = JSON.stringify({
+        type: 'import_demo_repo',
+        requestId: 'demo-next',
+        repoId: 'deckgraph-fixture',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toContain('already in progress');
+      expect(mockImportDemoRepository).not.toHaveBeenCalled();
+    });
+
+    it('uses connection scan data for demo view queries and sync', async () => {
+      const scanResult = createMockScanResult('/tmp/deckgraph-demo-cache/deckgraph-fixture');
+      connection.scanResult = scanResult;
+      connection.projectRoot = '/tmp/deckgraph-demo-cache/deckgraph-fixture';
+      const state = createMockState({ demoMode: true });
+      mockExecuteQuery.mockReturnValue(EMPTY_VIEW_RESULT);
+
+      const viewResult = await handleMessage(
+        JSON.stringify({
+          type: 'view_query',
+          requestId: 'demo-view',
+          query: { ecosystems: ['npm'] },
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+      const syncResult = await handleMessage(
+        JSON.stringify({ type: 'sync', requestId: 'demo-sync' }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(viewResult.type).toBe('view_result');
+      expect(mockExecuteQuery).toHaveBeenCalledWith(scanResult.graph, { ecosystems: ['npm'] });
+      expect(syncResult.type).toBe('project_overview');
+      if (syncResult.type === 'project_overview') {
+        expect(syncResult.data).toBe(scanResult.project);
+      }
+    });
+
+    it('blocks package mutations in demo mode', async () => {
+      const state = createMockState({ demoMode: true, scanResult: createMockScanResult() });
+
+      const raw = JSON.stringify({
+        type: 'package_remove',
+        requestId: 'demo-2',
+        ecosystem: 'npm',
+        packageName: 'react',
+        modulePath: 'packages/app',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      const error = result as ErrorMessage;
+      expect(error.message).toContain('read-only');
     });
   });
 

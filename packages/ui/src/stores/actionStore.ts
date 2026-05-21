@@ -24,6 +24,7 @@ export interface ActionActions {
   startBatch: () => void;
   batchComplete: (results: readonly PackageActionResult[]) => void;
   clearBatch: () => void;
+  reset: () => void;
 }
 
 export type ActionStore = ActionState & ActionActions;
@@ -58,4 +59,12 @@ export const useActionStore = create<ActionStore>((set) => ({
 
   clearBatch: () =>
     set(() => ({ batchResults: [], isBatchRunning: false })),
+
+  reset: () =>
+    set(() => ({
+      inProgress: new Map(),
+      lastResult: null,
+      batchResults: [],
+      isBatchRunning: false,
+    })),
 }));

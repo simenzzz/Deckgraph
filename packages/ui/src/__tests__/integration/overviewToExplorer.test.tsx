@@ -64,8 +64,16 @@ beforeEach(() => {
   vi.useFakeTimers();
 
   // Reset all stores
-  useConnectionStore.setState({ status: 'disconnected', lastError: null });
-  useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
+  useConnectionStore.setState({
+    status: 'disconnected',
+    lastError: null,
+    lastErrorSuggestion: null,
+    configPresent: true,
+    hasScannedData: false,
+    demoMode: false,
+    demoRepositories: [],
+  });
+  useProjectStore.setState({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false });
   useViewStore.setState({ result: null, isLoading: false, selectedModulePath: null, currentView: 'overview' });
   useFilterStore.getState().resetFilters();
 });

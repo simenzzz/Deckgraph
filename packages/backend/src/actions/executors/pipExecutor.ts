@@ -7,7 +7,6 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { execa } from 'execa';
 
 import type { PackageActionResult } from '@deckgraph/shared';
 import type {
@@ -17,8 +16,7 @@ import type {
   RemoveOptions,
   UpdateOptions,
 } from '../types.js';
-
-const SUBPROCESS_TIMEOUT_MS = 60_000;
+import { runCommand } from './runCommand.js';
 
 type PythonPackageManager = 'poetry' | 'pip';
 
@@ -37,23 +35,6 @@ function detectPythonPM(ctx: ExecutorContext): PythonPackageManager {
 
 function formatCommand(pm: PythonPackageManager, args: readonly string[]): string {
   return `${pm} ${args.join(' ')}`;
-}
-
-async function runCommand(
-  pm: PythonPackageManager,
-  args: readonly string[],
-  cwd: string,
-): Promise<{ success: boolean; stderr: string }> {
-  try {
-    await execa(pm, args, { cwd, timeout: SUBPROCESS_TIMEOUT_MS });
-    return { success: true, stderr: '' };
-  } catch (error: unknown) {
-    const stderr =
-      error !== null && typeof error === 'object' && 'stderr' in error
-        ? String(error.stderr)
-        : String(error);
-    return { success: false, stderr };
-  }
 }
 
 function poetryGroup(scope: string): string[] {

@@ -9,7 +9,6 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { execa } from 'execa';
 
 import type { PackageActionResult } from '@deckgraph/shared';
 import type {
@@ -19,8 +18,9 @@ import type {
   RemoveOptions,
   UpdateOptions,
 } from '../types.js';
+import { runCommand } from './runCommand.js';
 
-const SUBPROCESS_TIMEOUT_MS = 120_000; // Maven is slow
+const MAVEN_TIMEOUT_MS = 120_000; // Maven is slow
 
 /**
  * Read pom.xml as a string. Returns null if not found.
@@ -152,8 +152,8 @@ export function createMavenExecutor(): EcosystemExecutor {
       ];
       const command = `mvn ${mvnArgs.join(' ')}`;
 
-      try {
-        await execa('mvn', mvnArgs, { cwd: ctx.cwd, timeout: SUBPROCESS_TIMEOUT_MS });
+      const mvnResult = await runCommand('mvn', mvnArgs, ctx.cwd, MAVEN_TIMEOUT_MS);
+      if (mvnResult.success) {
         return {
           action: 'update',
           ecosystem: 'maven',
@@ -165,9 +165,9 @@ export function createMavenExecutor(): EcosystemExecutor {
           error: null,
           command,
         };
-      } catch {
-        // Fallback: direct pom.xml edit
       }
+
+      // Fallback: direct pom.xml edit
 
       const pom = readPom(ctx);
       if (!pom) {

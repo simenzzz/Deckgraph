@@ -9,11 +9,12 @@
 
 import { z } from 'zod';
 import { packageActionResultSchema, packageBatchOperationSchema } from './actions.js';
-import { dependencySchema, dependencyScopeSchema, ecosystemSchema, moduleSchema, projectSchema, workspaceSchema } from './project.js';
+import { demoRepositorySchema, dependencySchema, dependencyScopeSchema, ecosystemSchema, moduleSchema, projectSchema, workspaceSchema } from './project.js';
 import { viewQuerySchema, viewResultSchema } from './views.js';
 
 import type {
   ScanProjectMessage,
+  ImportDemoRepoMessage,
   ScanWorkspaceMessage,
   ViewQueryMessage,
   AnalyzeImportsMessage,
@@ -47,6 +48,12 @@ import type { Expect, Mutable } from '../types/typeUtils.js';
 export const scanProjectMessageSchema = z.object({
   type: z.literal('scan_project'),
   requestId: z.string().min(1).max(128),
+});
+
+export const importDemoRepoMessageSchema = z.object({
+  type: z.literal('import_demo_repo'),
+  requestId: z.string().min(1).max(128),
+  repoId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
 });
 
 export const scanWorkspaceMessageSchema = z.object({
@@ -113,6 +120,7 @@ export const packageBatchMessageSchema = z.object({
 
 export const clientMessageSchema = z.discriminatedUnion('type', [
   scanProjectMessageSchema,
+  importDemoRepoMessageSchema,
   scanWorkspaceMessageSchema,
   viewQueryMessageSchema,
   analyzeImportsMessageSchema,
@@ -208,6 +216,8 @@ export const readyMessageSchema = z.object({
   requestId: z.string().min(1).max(128),
   configPresent: z.boolean(),
   hasScannedData: z.boolean(),
+  demoMode: z.boolean(),
+  demoRepositories: z.array(demoRepositorySchema).max(20),
 });
 
 export const serverMessageSchema = z.discriminatedUnion('type', [
@@ -231,6 +241,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
 
 export const parseClientMessage = (value: unknown) => clientMessageSchema.parse(value);
 export const parseScanProjectMessage = (value: unknown) => scanProjectMessageSchema.parse(value);
+export const parseImportDemoRepoMessage = (value: unknown) => importDemoRepoMessageSchema.parse(value);
 export const parseScanWorkspaceMessage = (value: unknown) => scanWorkspaceMessageSchema.parse(value);
 export const parseViewQueryMessage = (value: unknown) => viewQueryMessageSchema.parse(value);
 export const parseAnalyzeImportsMessage = (value: unknown) =>
@@ -278,6 +289,7 @@ export const parseReadyMessage = (value: unknown) => readyMessageSchema.parse(va
 export type _MessageSchemaAssertions = [
   // Forward direction: ZodOutput ⊆ Interface
   Expect<z.infer<typeof scanProjectMessageSchema> extends ScanProjectMessage ? true : false>,
+  Expect<z.infer<typeof importDemoRepoMessageSchema> extends ImportDemoRepoMessage ? true : false>,
   Expect<z.infer<typeof scanWorkspaceMessageSchema> extends ScanWorkspaceMessage ? true : false>,
   Expect<z.infer<typeof viewQueryMessageSchema> extends ViewQueryMessage ? true : false>,
   Expect<z.infer<typeof analyzeImportsMessageSchema> extends AnalyzeImportsMessage ? true : false>,
@@ -323,6 +335,7 @@ export type _MessageSchemaAssertions = [
 
   // Reverse direction: Interface ⊆ ZodOutput
   Expect<Mutable<ScanProjectMessage> extends z.infer<typeof scanProjectMessageSchema> ? true : false>,
+  Expect<Mutable<ImportDemoRepoMessage> extends z.infer<typeof importDemoRepoMessageSchema> ? true : false>,
   Expect<Mutable<ScanWorkspaceMessage> extends z.infer<typeof scanWorkspaceMessageSchema> ? true : false>,
   Expect<Mutable<ViewQueryMessage> extends z.infer<typeof viewQueryMessageSchema> ? true : false>,
   Expect<Mutable<AnalyzeImportsMessage> extends z.infer<typeof analyzeImportsMessageSchema> ? true : false>,

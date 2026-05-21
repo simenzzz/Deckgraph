@@ -6,7 +6,6 @@
 import type { Dependency, OutdatedSeverity } from '@deckgraph/shared';
 import { OutdatedBadge } from './OutdatedBadge';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, ExternalLink, RefreshCw } from 'lucide-react';

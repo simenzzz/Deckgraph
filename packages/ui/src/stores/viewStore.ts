@@ -20,6 +20,7 @@ export interface ViewActions {
   setLoading: (isLoading: boolean) => void;
   selectModule: (path: string | null) => void;
   setView: (view: CurrentView) => void;
+  clear: () => void;
 }
 
 export type ViewStore = ViewState & ViewActions;
@@ -49,4 +50,12 @@ export const useViewStore = create<ViewStore>((set) => ({
 
   setView: (view) =>
     set((state) => ({ ...state, currentView: view })),
+
+  clear: () =>
+    set(() => ({
+      result: null,
+      isLoading: false,
+      selectedModulePath: null,
+      currentView: 'overview',
+    })),
 }));

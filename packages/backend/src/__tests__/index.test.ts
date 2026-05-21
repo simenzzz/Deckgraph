@@ -89,10 +89,11 @@ describe('createProgram', () => {
     expect(opts.open).toBe(true);
   });
 
-  it('errors when --project is missing', () => {
+  it('allows --project to be omitted so main can validate demo mode', () => {
     mockReadFileSync.mockReturnValue(JSON.stringify({ version: '0.0.1' }));
     const program = createProgram();
-    program.exitOverride();
-    expect(() => program.parse(['node', 'deckgraph'])).toThrow();
+    program.parse(['node', 'deckgraph']);
+    const opts = program.opts();
+    expect(opts.project).toBeUndefined();
   });
 });

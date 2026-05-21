@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useConnectionStore } from '@/stores';
 import type { WsClient } from '@/lib/wsClient';
 
 interface BatchActionsProps {
@@ -31,6 +32,7 @@ interface BatchActionsProps {
 export function BatchActions({ outdatedDeps, unusedDeps, wsClient }: BatchActionsProps) {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const demoMode = useConnectionStore((s) => s.demoMode);
 
   const { isBatchRunning, batchResults, runBatch, clearBatch } =
     usePackageBatch(wsClient);
@@ -70,6 +72,14 @@ export function BatchActions({ outdatedDeps, unusedDeps, wsClient }: BatchAction
       })),
     [unusedDeps],
   );
+
+  if (demoMode) {
+    return (
+      <div className="text-xs text-muted-foreground" data-testid="batch-actions-readonly">
+        Hosted demo is read-only.
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-2" data-testid="batch-actions">

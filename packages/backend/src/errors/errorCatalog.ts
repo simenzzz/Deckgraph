@@ -114,6 +114,21 @@ export const ErrorCatalog = {
     message: 'Package manager command failed',
     suggestion: 'Check the package manager output and try again manually',
   },
+  ECOSYSTEM_MISMATCH: {
+    code: 'ECOSYSTEM_MISMATCH',
+    message: 'Ecosystem does not match the target module',
+    suggestion: 'Ensure the ecosystem matches the module type (e.g. npm for Node.js modules)',
+  },
+  DEMO_MODE_READ_ONLY: {
+    code: 'DEMO_MODE_READ_ONLY',
+    message: 'The hosted demo is read-only',
+    suggestion: 'Clone Deckgraph locally to run package install, update, or remove actions',
+  },
+  DEMO_REPOSITORY_UNAVAILABLE: {
+    code: 'DEMO_REPOSITORY_UNAVAILABLE',
+    message: 'Demo repository unavailable',
+    suggestion: 'Choose one of the listed demo repositories and try again',
+  },
 } as const satisfies Record<string, ErrorEntry>;
 
 /**

@@ -42,7 +42,9 @@ export function detectCrossRootDeps(
   for (const project of projects) {
     for (const module of project.modules) {
       for (const dep of module.dependencies) {
-        const key = `${dep.ecosystem}:${dep.name}`;
+        // Normalize npm names to lowercase (npm registry is case-insensitive)
+        const depName = dep.ecosystem === 'npm' ? dep.name.toLowerCase() : dep.name;
+        const key = `${dep.ecosystem}:${depName}`;
 
         let usage = usageMap.get(key);
         if (!usage) {

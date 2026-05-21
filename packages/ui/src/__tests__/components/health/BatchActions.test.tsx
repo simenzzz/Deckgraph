@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { BatchActions } from '@/components/health/BatchActions';
 import { useActionStore } from '@/stores/actionStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import type { OutdatedDep, UnusedDep } from '@/hooks/useHealthReport';
 
 const outdatedDeps: OutdatedDep[] = [
@@ -20,6 +21,15 @@ describe('BatchActions', () => {
       lastResult: null,
       batchResults: [],
       isBatchRunning: false,
+    });
+    useConnectionStore.setState({
+      status: 'connected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: true,
+      hasScannedData: true,
+      demoMode: false,
+      demoRepositories: [],
     });
   });
 
@@ -81,5 +91,15 @@ describe('BatchActions', () => {
     expect(screen.getByTestId('batch-results')).toBeInTheDocument();
     expect(screen.getByText('1 succeeded')).toBeInTheDocument();
     expect(screen.getByText('1 failed')).toBeInTheDocument();
+  });
+
+  it('shows read-only message in hosted demo mode', () => {
+    useConnectionStore.setState({ demoMode: true });
+
+    render(<BatchActions outdatedDeps={outdatedDeps} unusedDeps={unusedDeps} wsClient={null} />);
+
+    expect(screen.getByTestId('batch-actions-readonly')).toBeInTheDocument();
+    expect(screen.queryByTestId('batch-update-all')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('batch-remove-all')).not.toBeInTheDocument();
   });
 });

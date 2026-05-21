@@ -7,12 +7,13 @@
  */
 
 import { useState } from 'react';
-import type { Dependency } from '@deckgraph/shared';
+import type { Dependency, PackageActionResult } from '@deckgraph/shared';
 import { classifyOutdated } from '@deckgraph/shared';
 import { usePackageUpdate, usePackageRemove } from '@/hooks/usePackageAction';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ActionResultDisplay } from '@/components/shared/ActionResultDisplay';
+import { useConnectionStore } from '@/stores';
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/dialog';
 import { UpdateConfirmation } from '@/components/detail/UpdateConfirmation';
 import type { WsClient } from '@/lib/wsClient';
+import { isRelevantResult } from '@/lib/actionUtils';
 
 interface DependencyActionsProps {
   readonly dep: Dependency;
@@ -33,6 +35,7 @@ interface DependencyActionsProps {
 export function DependencyActions({ dep, modulePath, wsClient }: DependencyActionsProps) {
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
+  const demoMode = useConnectionStore((s) => s.demoMode);
 
   const updateAction = usePackageUpdate(dep, modulePath, wsClient);
   const removeAction = usePackageRemove(dep, modulePath, wsClient);
@@ -45,6 +48,14 @@ export function DependencyActions({ dep, modulePath, wsClient }: DependencyActio
     dep.registryMeta &&
     outdatedSeverity &&
     outdatedSeverity !== 'up-to-date';
+
+  if (demoMode) {
+    return (
+      <span className="text-xs text-muted-foreground" title="The hosted demo is read-only">
+        Read-only
+      </span>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1">
@@ -120,13 +131,10 @@ function RemoveConfirmation({
   onConfirm,
   onClearResult,
 }: RemoveConfirmationProps) {
-  const isRelevantResult =
-    lastResult &&
-    lastResult.packageName === dep.name &&
-    lastResult.action === 'remove';
+  const relevant = isRelevantResult(lastResult, 'remove', dep.name, modulePath);
 
   const handleClose = () => {
-    if (isRelevantResult) {
+    if (relevant) {
       onClearResult();
     }
     onOpenChange(false);
@@ -175,14 +183,14 @@ function RemoveConfirmation({
             </div>
           )}
 
-          {isRelevantResult && <ActionResultDisplay result={lastResult} actionLabel="Remove" testId="remove-result" />}
+          {relevant && <ActionResultDisplay result={lastResult} actionLabel="Remove" testId="remove-result" />}
         </div>
 
         <DialogFooter>
           <Button variant="ghost" onClick={handleClose} disabled={isRemoving}>
-            {isRelevantResult ? 'Close' : 'Cancel'}
+            {relevant ? 'Close' : 'Cancel'}
           </Button>
-          {!isRelevantResult && (
+          {!relevant && (
             <Button
               variant="destructive"
               onClick={onConfirm}

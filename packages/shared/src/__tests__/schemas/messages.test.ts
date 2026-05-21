@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   scanProjectMessageSchema,
+  importDemoRepoMessageSchema,
   viewQueryMessageSchema,
   analyzeImportsMessageSchema,
   enrichDependencyMessageSchema,
@@ -32,6 +33,17 @@ describe('client message schemas', () => {
     it('accepts valid scan project messages', () => {
       const message = { ...baseMessage, type: 'scan_project' as const };
       expect(scanProjectMessageSchema.parse(message)).toEqual(message);
+    });
+  });
+
+  describe('importDemoRepoMessageSchema', () => {
+    it('accepts valid demo import messages', () => {
+      const message = {
+        ...baseMessage,
+        type: 'import_demo_repo' as const,
+        repoId: 'deckgraph-fixture',
+      };
+      expect(importDemoRepoMessageSchema.parse(message)).toEqual(message);
     });
   });
 
@@ -83,6 +95,13 @@ describe('client message schemas', () => {
     it('accepts all client message types', () => {
       expect(
         clientMessageSchema.parse({ ...baseMessage, type: 'scan_project' as const }),
+      ).toBeTruthy();
+      expect(
+        clientMessageSchema.parse({
+          ...baseMessage,
+          type: 'import_demo_repo' as const,
+          repoId: 'deckgraph-fixture',
+        }),
       ).toBeTruthy();
       expect(
         clientMessageSchema.parse({
@@ -318,6 +337,23 @@ describe('server message schemas', () => {
           type: 'error' as const,
           message: 'Error',
           suggestion: 'Fix it',
+        }),
+      ).toBeTruthy();
+      expect(
+        serverMessageSchema.parse({
+          ...baseMessage,
+          type: 'ready' as const,
+          configPresent: false,
+          hasScannedData: false,
+          demoMode: true,
+          demoRepositories: [
+            {
+              id: 'deckgraph-fixture',
+              label: 'Deckgraph Fixture',
+              url: 'https://github.com/simenzzz/Deckgraph.git',
+              description: 'A public demo repository.',
+            },
+          ],
         }),
       ).toBeTruthy();
     });

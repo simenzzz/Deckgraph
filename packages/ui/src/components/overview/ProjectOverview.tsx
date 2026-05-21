@@ -4,8 +4,8 @@
  * Falls back to ScanPrompt when no project is scanned.
  */
 
-import type { Ecosystem, Module } from '@deckgraph/shared';
-import { useProjectStore, useViewStore, useFilterStore } from '@/stores';
+import type { Ecosystem, Module, Project, Workspace } from '@deckgraph/shared';
+import { useProjectStore, useViewStore, useFilterStore, useWorkspaceStore } from '@/stores';
 import { ALL_ECOSYSTEMS } from '@/lib/ecosystemConfig';
 import { EcosystemCard } from './EcosystemCard';
 import { HealthSummary } from './HealthSummary';
@@ -18,15 +18,18 @@ export interface ProjectOverviewProps {
 
 export function ProjectOverview({ wsClient }: ProjectOverviewProps) {
   const project = useProjectStore((s) => s.project);
+  const workspace = useWorkspaceStore((s) => s.workspace);
+  const activeProjectRoot = useWorkspaceStore((s) => s.activeProjectRoot);
   const setView = useViewStore((s) => s.setView);
   const resetFilters = useFilterStore((s) => s.resetFilters);
   const toggleEcosystem = useFilterStore((s) => s.toggleEcosystem);
+  const displayProject = project ?? buildWorkspaceProject(workspace, activeProjectRoot);
 
-  if (!project) {
+  if (!displayProject) {
     return <ScanPrompt wsClient={wsClient} />;
   }
 
-  const modulesByEcosystem = groupByEcosystem(project.modules);
+  const modulesByEcosystem = groupByEcosystem(displayProject.modules);
   const activeEcosystems = ALL_ECOSYSTEMS.filter(
     (e) => (modulesByEcosystem.get(e)?.length ?? 0) > 0,
   );
@@ -40,7 +43,9 @@ export function ProjectOverview({ wsClient }: ProjectOverviewProps) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Project Overview</h2>
+      <h2 className="text-xl font-semibold">
+        {project ? 'Project Overview' : 'Workspace Overview'}
+      </h2>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {activeEcosystems.map((eco) => (
@@ -53,7 +58,7 @@ export function ProjectOverview({ wsClient }: ProjectOverviewProps) {
         ))}
       </div>
 
-      <HealthSummary project={project} />
+      <HealthSummary project={displayProject} />
     </div>
   );
 }
@@ -66,4 +71,19 @@ function groupByEcosystem(modules: readonly Module[]): Map<Ecosystem, Module[]> 
     map.set(mod.ecosystem, [...existing, mod]);
   }
   return map;
+}
+
+function buildWorkspaceProject(
+  workspace: Workspace | null,
+  activeProjectRoot: string | null,
+): Project | null {
+  if (!workspace || activeProjectRoot !== null) return null;
+
+  return {
+    root: 'Workspace',
+    config: null,
+    modules: workspace.projects.flatMap((project) => project.modules),
+    crossEdges: workspace.projects.flatMap((project) => project.crossEdges),
+    lastScannedAt: workspace.lastScannedAt,
+  };
 }

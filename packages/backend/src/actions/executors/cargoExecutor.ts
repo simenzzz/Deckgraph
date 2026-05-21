@@ -4,8 +4,6 @@
  * Uses `cargo add` for install/update and `cargo remove` for removal.
  */
 
-import { execa } from 'execa';
-
 import type { PackageActionResult } from '@deckgraph/shared';
 import type {
   EcosystemExecutor,
@@ -14,27 +12,10 @@ import type {
   RemoveOptions,
   UpdateOptions,
 } from '../types.js';
-
-const SUBPROCESS_TIMEOUT_MS = 60_000;
+import { runCommand } from './runCommand.js';
 
 function formatCommand(args: readonly string[]): string {
   return `cargo ${args.join(' ')}`;
-}
-
-async function runCommand(
-  args: readonly string[],
-  cwd: string,
-): Promise<{ success: boolean; stderr: string }> {
-  try {
-    await execa('cargo', args, { cwd, timeout: SUBPROCESS_TIMEOUT_MS });
-    return { success: true, stderr: '' };
-  } catch (error: unknown) {
-    const stderr =
-      error !== null && typeof error === 'object' && 'stderr' in error
-        ? String(error.stderr)
-        : String(error);
-    return { success: false, stderr };
-  }
 }
 
 function scopeFlag(scope: string): string[] {
@@ -59,7 +40,7 @@ export function createCargoExecutor(): EcosystemExecutor {
         ...scopeFlag(options.scope),
       ];
       const command = formatCommand(args);
-      const { success, stderr } = await runCommand(args, ctx.cwd);
+      const { success, stderr } = await runCommand('cargo', args, ctx.cwd);
 
       return {
         action: 'update',
@@ -80,7 +61,7 @@ export function createCargoExecutor(): EcosystemExecutor {
         : options.packageName;
       const args = ['add', pkg, ...scopeFlag(options.scope)];
       const command = formatCommand(args);
-      const { success, stderr } = await runCommand(args, ctx.cwd);
+      const { success, stderr } = await runCommand('cargo', args, ctx.cwd);
 
       return {
         action: 'install',
@@ -98,7 +79,7 @@ export function createCargoExecutor(): EcosystemExecutor {
     async remove(ctx: ExecutorContext, options: RemoveOptions): Promise<PackageActionResult> {
       const args = ['remove', options.packageName];
       const command = formatCommand(args);
-      const { success, stderr } = await runCommand(args, ctx.cwd);
+      const { success, stderr } = await runCommand('cargo', args, ctx.cwd);
 
       return {
         action: 'remove',

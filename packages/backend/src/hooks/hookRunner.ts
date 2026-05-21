@@ -16,6 +16,27 @@ const HOOK_TIMEOUT_MS = 30_000;
 const MAX_STDOUT_BYTES = 4096;
 const MAX_STDERR_BYTES = 4096;
 
+/** Env var keys safe to pass to hook subprocesses. */
+const SAFE_ENV_KEYS = [
+  'PATH', 'HOME', 'USER', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE',
+  'TERM', 'NODE_ENV', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_CACHE_HOME',
+];
+
+/**
+ * Build a filtered copy of process.env with only safe keys.
+ * Prevents leaking sensitive tokens (NPM_TOKEN, GITHUB_TOKEN, etc.)
+ * to hook subprocesses.
+ */
+function safeProcessEnv(): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const key of SAFE_ENV_KEYS) {
+    if (process.env[key]) {
+      env[key] = process.env[key]!;
+    }
+  }
+  return env;
+}
+
 /**
  * Shell metacharacters that are NOT allowed in hook commands.
  * Prevents command injection via shell operators.
@@ -87,9 +108,22 @@ export function splitCommand(cmd: string): string[] {
   let current = '';
   let inSingleQuote = false;
   let inDoubleQuote = false;
+  let escaped = false;
 
   for (let i = 0; i < cmd.length; i++) {
-    const char = cmd[i];
+    const char = cmd[i]!;
+
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\' && inDoubleQuote) {
+      // In double quotes, backslash escapes the next character
+      escaped = true;
+      continue;
+    }
 
     if (char === "'" && !inDoubleQuote) {
       inSingleQuote = !inSingleQuote;
@@ -110,6 +144,10 @@ export function splitCommand(cmd: string): string[] {
     }
 
     current += char;
+  }
+
+  if (inSingleQuote || inDoubleQuote) {
+    throw new Error('Hook command has unterminated quotes');
   }
 
   if (current.length > 0) {
@@ -168,7 +206,7 @@ export async function runHook(
     shell: false,
     cwd: context.projectRoot,
     timeout: HOOK_TIMEOUT_MS,
-    env: { ...process.env, ...env } as Record<string, string>,
+    env: { ...safeProcessEnv(), ...env },
     reject: false, // Don't throw on non-zero exit
   });
 

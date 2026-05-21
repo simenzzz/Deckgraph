@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { Header } from '@/components/layout/Header';
 import { useProjectStore } from '@/stores/projectStore';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useViewStore } from '@/stores/viewStore';
 import type { WsClient } from '@/lib/wsClient';
 import type { Project } from '@deckgraph/shared';
 
@@ -28,8 +29,17 @@ function createMockWsClient(): WsClient {
 
 describe('Header', () => {
   beforeEach(() => {
-    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
-    useConnectionStore.setState({ status: 'connected', lastError: null });
+    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false });
+    useConnectionStore.setState({
+      status: 'connected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: null,
+      hasScannedData: null,
+      demoMode: false,
+      demoRepositories: [],
+    });
+    useViewStore.setState({ result: null, isLoading: false, selectedModulePath: null, currentView: 'overview' });
   });
 
   it('shows Deckgraph when no project', () => {
@@ -64,5 +74,23 @@ describe('Header', () => {
     useProjectStore.setState({ isScanning: true });
     render(<Header wsClient={null} />);
     expect(screen.getByText('Scanning...')).toBeInTheDocument();
+  });
+
+  it('hides scan button in hosted demo mode', () => {
+    useConnectionStore.setState({ demoMode: true });
+    render(<Header wsClient={null} />);
+    expect(screen.queryByText('Scan')).not.toBeInTheDocument();
+  });
+
+  it('allows hosted demo users to return to repository choices', () => {
+    useConnectionStore.setState({ demoMode: true });
+    useProjectStore.setState({ project: mockProject });
+    useViewStore.setState({ currentView: 'explorer' });
+
+    render(<Header wsClient={null} />);
+    fireEvent.click(screen.getByRole('button', { name: /change repository/i }));
+
+    expect(useProjectStore.getState().project).toBeNull();
+    expect(useViewStore.getState().currentView).toBe('overview');
   });
 });

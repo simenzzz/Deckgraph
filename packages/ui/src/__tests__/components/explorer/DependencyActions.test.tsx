@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DependencyActions } from '@/components/explorer/DependencyActions';
 import { useActionStore } from '@/stores/actionStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import type { Dependency } from '@deckgraph/shared';
 
 const baseDep: Dependency = {
@@ -37,6 +38,15 @@ describe('DependencyActions', () => {
       lastResult: null,
       batchResults: [],
       isBatchRunning: false,
+    });
+    useConnectionStore.setState({
+      status: 'connected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: true,
+      hasScannedData: true,
+      demoMode: false,
+      demoRepositories: [],
     });
   });
 
@@ -82,5 +92,15 @@ describe('DependencyActions', () => {
     fireEvent.click(screen.getByTestId('action-remove-react'));
     expect(screen.queryByTestId('remove-usage-warning')).not.toBeInTheDocument();
     expect(screen.queryByTestId('remove-no-analysis-warning')).not.toBeInTheDocument();
+  });
+
+  it('shows read-only state and hides actions in hosted demo mode', () => {
+    useConnectionStore.setState({ demoMode: true });
+
+    render(<DependencyActions dep={outdatedDep} modulePath="packages/app" wsClient={null} />);
+
+    expect(screen.getByText('Read-only')).toBeInTheDocument();
+    expect(screen.queryByTestId('action-update-react')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('action-remove-react')).not.toBeInTheDocument();
   });
 });

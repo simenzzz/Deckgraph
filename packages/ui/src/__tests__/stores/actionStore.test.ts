@@ -95,4 +95,18 @@ describe('actionStore', () => {
     expect(state.batchResults).toHaveLength(0);
     expect(state.isBatchRunning).toBe(false);
   });
+
+  it('resets all action state', () => {
+    useActionStore.getState().startAction('packages/app', 'req-1');
+    useActionStore.getState().completeAction(successResult);
+    useActionStore.getState().startBatch();
+
+    useActionStore.getState().reset();
+
+    const state = useActionStore.getState();
+    expect(state.inProgress.size).toBe(0);
+    expect(state.lastResult).toBeNull();
+    expect(state.batchResults).toEqual([]);
+    expect(state.isBatchRunning).toBe(false);
+  });
 });

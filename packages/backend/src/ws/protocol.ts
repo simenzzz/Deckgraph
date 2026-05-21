@@ -27,6 +27,7 @@ import { updatePackage, installPackage, removePackage } from '../actions/package
 import { executeBatch } from '../actions/batchExecutor.js';
 import { isReasonablePackageName } from '../actions/validators.js';
 import { scanProject } from '../scanner/scanner.js';
+import type { ScanResult } from '../scanner/scanner.js';
 import { scanWorkspace } from '../scanner/workspaceScanner.js';
 import { incrementalScan } from '../scanner/incrementalScanner.js';
 import type { FileChangeEvent } from '../watcher/fileWatcher.js';
@@ -38,12 +39,14 @@ import { discoverRoots } from '../discovery/workspaceDiscovery.js';
 import { runHooksForEvent } from '../hooks/notifier.js';
 import { createLogger } from '../logger.js';
 import { ErrorCatalog, createCatalogError, mapError } from '../errors/index.js';
+import { importDemoRepository } from './demoRepository.js';
 import type { ClientConnection, ProgressEmitter, ServerState } from './types.js';
 
 const logger = createLogger('protocol');
 
 const VALID_TYPES = [
   'scan_project',
+  'import_demo_repo',
   'scan_workspace',
   'view_query',
   'sync',
@@ -92,7 +95,7 @@ export async function handleMessage(
     throw error;
   }
 
-  return dispatch(parsed, state, emitProgress, broadcast);
+  return dispatch(parsed, connection, state, emitProgress, broadcast);
 }
 
 /**
@@ -101,6 +104,7 @@ export async function handleMessage(
  */
 async function dispatch(
   message: ClientMessage,
+  connection: ClientConnection,
   state: ServerState,
   emitProgress: ProgressEmitter,
   broadcast?: (message: ServerMessage) => void,
@@ -110,7 +114,19 @@ async function dispatch(
       case 'scan_project':
         return await handleScanProject(message.requestId, state, emitProgress);
 
+      case 'import_demo_repo':
+        return await handleImportDemoRepo(
+          message.requestId,
+          message.repoId,
+          connection,
+          state,
+          emitProgress,
+        );
+
       case 'scan_workspace':
+        if (state.demoMode) {
+          return createCatalogError(ErrorCatalog.DEMO_MODE_READ_ONLY, message.requestId);
+        }
         return await handleScanWorkspace(
           message.requestId,
           state,
@@ -119,15 +135,16 @@ async function dispatch(
         );
 
       case 'view_query':
-        return handleViewQuery(message.requestId, message.query, state);
+        return handleViewQuery(message.requestId, message.query, connection, state);
 
       case 'sync':
-        return handleSync(message.requestId, state);
+        return handleSync(message.requestId, connection, state);
 
       case 'analyze_imports':
         return await handleAnalyzeImports(
           message.requestId,
           message.modulePath,
+          connection,
           state,
           emitProgress,
         );
@@ -137,11 +154,15 @@ async function dispatch(
           message.requestId,
           message.ecosystem,
           message.packageName,
+          connection,
           state,
           emitProgress,
         );
 
       case 'package_update':
+        if (state.demoMode) {
+          return createCatalogError(ErrorCatalog.DEMO_MODE_READ_ONLY, message.requestId);
+        }
         return await handlePackageUpdate(
           message.requestId,
           message.ecosystem,
@@ -153,6 +174,9 @@ async function dispatch(
         );
 
       case 'package_install':
+        if (state.demoMode) {
+          return createCatalogError(ErrorCatalog.DEMO_MODE_READ_ONLY, message.requestId);
+        }
         return await handlePackageInstall(
           message.requestId,
           message.ecosystem,
@@ -165,6 +189,9 @@ async function dispatch(
         );
 
       case 'package_remove':
+        if (state.demoMode) {
+          return createCatalogError(ErrorCatalog.DEMO_MODE_READ_ONLY, message.requestId);
+        }
         return await handlePackageRemove(
           message.requestId,
           message.ecosystem,
@@ -175,6 +202,9 @@ async function dispatch(
         );
 
       case 'package_batch':
+        if (state.demoMode) {
+          return createCatalogError(ErrorCatalog.DEMO_MODE_READ_ONLY, message.requestId);
+        }
         return await handlePackageBatch(
           message.requestId,
           message.operations,
@@ -206,6 +236,14 @@ async function handleScanProject(
   state: ServerState,
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
+  if (state.demoMode) {
+    return createCatalogError(
+      ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE,
+      requestId,
+      'select a demo repository first',
+    );
+  }
+
   if (state.isScanning) {
     return createCatalogError(ErrorCatalog.SCAN_ALREADY_RUNNING, requestId);
   }
@@ -230,6 +268,60 @@ async function handleScanProject(
     return overview;
   } finally {
     state.isScanning = false;
+  }
+}
+
+/**
+ * Handle import_demo_repo: clone a curated GitHub repository and scan it for this client.
+ */
+async function handleImportDemoRepo(
+  requestId: string,
+  repoId: string,
+  connection: ClientConnection,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.demoMode) {
+    return createCatalogError(ErrorCatalog.VALIDATION_FAILED, requestId, 'demo mode is not enabled');
+  }
+
+  if (connection.demoImportRequestId) {
+    return createCatalogError(ErrorCatalog.SCAN_ALREADY_RUNNING, requestId);
+  }
+
+  connection.demoImportRequestId = requestId;
+  emitProgress(requestId, 'Importing demo repository...', 0);
+
+  try {
+    const imported = await importDemoRepository({
+      repoId,
+      repositories: state.demoRepositories,
+      cacheDir: state.demoCacheDir,
+    });
+
+    emitProgress(requestId, `Scanning ${imported.repository.label}...`, 0);
+    const result = await scanProject({ projectRoot: imported.path });
+
+    connection.projectRoot = imported.path;
+    connection.scanResult = result;
+
+    emitProgress(requestId, 'Demo repository ready', 1);
+
+    const overview: ProjectOverviewMessage = {
+      type: 'project_overview',
+      requestId,
+      data: result.project,
+    };
+
+    return overview;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'unknown error';
+    logger.warn({ repoId, error: detail }, 'Demo repository import failed');
+    return createCatalogError(ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE, requestId);
+  } finally {
+    if (connection.demoImportRequestId === requestId) {
+      connection.demoImportRequestId = null;
+    }
   }
 }
 
@@ -334,13 +426,15 @@ async function handleScanWorkspace(
 function handleViewQuery(
   requestId: string,
   query: ViewQuery,
+  connection: ClientConnection,
   state: ServerState,
 ): ServerMessage {
-  if (!state.scanResult) {
+  const scanResult = getActiveScanResult(connection, state);
+  if (!scanResult) {
     return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
-  const viewResult = executeQuery(state.scanResult.graph, query);
+  const viewResult = executeQuery(scanResult.graph, query);
 
   const response: ViewResultMessage = {
     type: 'view_result',
@@ -354,15 +448,20 @@ function handleViewQuery(
 /**
  * Handle sync: return current project overview.
  */
-function handleSync(requestId: string, state: ServerState): ServerMessage {
-  if (!state.scanResult) {
+function handleSync(
+  requestId: string,
+  connection: ClientConnection,
+  state: ServerState,
+): ServerMessage {
+  const scanResult = getActiveScanResult(connection, state);
+  if (!scanResult) {
     return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
   const overview: ProjectOverviewMessage = {
     type: 'project_overview',
     requestId,
-    data: state.scanResult.project,
+    data: scanResult.project,
   };
 
   return overview;
@@ -374,14 +473,16 @@ function handleSync(requestId: string, state: ServerState): ServerMessage {
 async function handleAnalyzeImports(
   requestId: string,
   modulePath: string,
+  connection: ClientConnection,
   state: ServerState,
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
-  if (!state.scanResult) {
+  const scanResult = getActiveScanResult(connection, state);
+  if (!scanResult) {
     return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
-  const module = state.scanResult.project.modules.find(
+  const module = scanResult.project.modules.find(
     (m) => m.path === modulePath,
   );
 
@@ -396,7 +497,7 @@ async function handleAnalyzeImports(
   emitProgress(requestId, `Analyzing imports for ${module.name}...`, 0);
 
   const result = await resolveImports(
-    state.projectRoot,
+    getActiveProjectRoot(connection, state),
     module,
     state.registry,
     state.packageMap,
@@ -404,22 +505,22 @@ async function handleAnalyzeImports(
 
   // Update the graph with the analyzed module (immutably)
   const updatedGraph = addModule(
-    state.scanResult.graph,
+    scanResult.graph,
     result.updatedModule,
   );
 
   // Update the project modules list (immutably)
-  const updatedModules = state.scanResult.project.modules.map((m) =>
+  const updatedModules = scanResult.project.modules.map((m) =>
     m.path === modulePath ? result.updatedModule : m,
   );
 
-  state.scanResult = {
+  setActiveScanResult(connection, state, {
     project: {
-      ...state.scanResult.project,
+      ...scanResult.project,
       modules: updatedModules,
     },
     graph: updatedGraph,
-  };
+  });
 
   emitProgress(requestId, 'Import analysis complete', 1);
 
@@ -444,10 +545,12 @@ async function handleEnrichDependency(
   requestId: string,
   ecosystem: Ecosystem,
   packageName: string,
+  connection: ClientConnection,
   state: ServerState,
   emitProgress: ProgressEmitter,
 ): Promise<ServerMessage> {
-  if (!state.scanResult) {
+  const scanResult = getActiveScanResult(connection, state);
+  if (!scanResult) {
     return createCatalogError(ErrorCatalog.NO_SCAN_DATA, requestId);
   }
 
@@ -471,7 +574,7 @@ async function handleEnrichDependency(
   // Find the dependency in the project and enrich it immutably
   let enrichedDep = null;
 
-  const updatedModules = state.scanResult.project.modules.map((mod) => {
+  const updatedModules = scanResult.project.modules.map((mod) => {
     const depIndex = mod.dependencies.findIndex(
       (d) => d.name === packageName && d.ecosystem === ecosystem,
     );
@@ -490,13 +593,13 @@ async function handleEnrichDependency(
     };
   });
 
-  state.scanResult = {
-    ...state.scanResult,
+  setActiveScanResult(connection, state, {
+    ...scanResult,
     project: {
-      ...state.scanResult.project,
+      ...scanResult.project,
       modules: updatedModules,
     },
-  };
+  });
 
   emitProgress(requestId, 'Enrichment complete', 1);
 
@@ -528,7 +631,7 @@ async function handleEnrichDependency(
  */
 async function handlePackageUpdate(
   requestId: string,
-  _ecosystem: Ecosystem,
+  ecosystem: Ecosystem,
   packageName: string,
   modulePath: string,
   targetVersion: string,
@@ -542,6 +645,10 @@ async function handlePackageUpdate(
   const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
   if (!module) {
     return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
+  }
+
+  if (module.ecosystem !== ecosystem) {
+    return createCatalogError(ErrorCatalog.ECOSYSTEM_MISMATCH, requestId, `expected ${module.ecosystem}, got ${ecosystem}`);
   }
 
   // Check per-module lock
@@ -607,6 +714,10 @@ async function handlePackageInstall(
     return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
   }
 
+  if (module.ecosystem !== ecosystem) {
+    return createCatalogError(ErrorCatalog.ECOSYSTEM_MISMATCH, requestId, `expected ${module.ecosystem}, got ${ecosystem}`);
+  }
+
   const existingLock = state.moduleActionLocks.get(modulePath);
   if (existingLock) {
     return createCatalogError(ErrorCatalog.OPERATION_IN_PROGRESS, requestId, module.name);
@@ -654,7 +765,7 @@ async function handlePackageInstall(
  */
 async function handlePackageRemove(
   requestId: string,
-  _ecosystem: Ecosystem,
+  ecosystem: Ecosystem,
   packageName: string,
   modulePath: string,
   state: ServerState,
@@ -667,6 +778,10 @@ async function handlePackageRemove(
   const module = state.scanResult.project.modules.find((m) => m.path === modulePath);
   if (!module) {
     return createCatalogError(ErrorCatalog.MODULE_NOT_FOUND, requestId, modulePath);
+  }
+
+  if (module.ecosystem !== ecosystem) {
+    return createCatalogError(ErrorCatalog.ECOSYSTEM_MISMATCH, requestId, `expected ${module.ecosystem}, got ${ecosystem}`);
   }
 
   const existingLock = state.moduleActionLocks.get(modulePath);
@@ -771,6 +886,32 @@ async function handlePackageBatch(
   return response;
 }
 
+function getActiveScanResult(
+  connection: ClientConnection,
+  state: ServerState,
+): ScanResult | null {
+  return state.demoMode ? connection.scanResult : state.scanResult;
+}
+
+function setActiveScanResult(
+  connection: ClientConnection,
+  state: ServerState,
+  scanResult: ScanResult,
+): void {
+  if (state.demoMode) {
+    connection.scanResult = scanResult;
+  } else {
+    state.scanResult = scanResult;
+  }
+}
+
+function getActiveProjectRoot(
+  connection: ClientConnection,
+  state: ServerState,
+): string {
+  return state.demoMode && connection.projectRoot ? connection.projectRoot : state.projectRoot;
+}
+
 /**
  * Build a FileChangeEvent for incremental re-scan after a package action.
  * Targets only the affected module's manifests.
@@ -783,4 +924,3 @@ function buildModuleChangeEvent(module: { readonly path: string; readonly manife
     affectedModules: [module.path],
   };
 }
-

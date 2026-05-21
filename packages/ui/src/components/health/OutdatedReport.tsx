@@ -5,7 +5,6 @@
 
 import { useState, useMemo } from 'react';
 import type { OutdatedDep } from '@/hooks/useHealthReport';
-import type { OutdatedSeverity } from '@deckgraph/shared';
 import { OutdatedBadge, SEVERITY_ORDER } from '@/components/detail/OutdatedBadge';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

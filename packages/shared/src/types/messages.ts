@@ -6,7 +6,7 @@
  */
 
 import type { PackageActionResult, PackageBatchOperation } from './actions.js';
-import type { Dependency, DependencyScope, Ecosystem, Module, Project, Workspace } from './project.js';
+import type { DemoRepository, Dependency, DependencyScope, Ecosystem, Module, Project, Workspace } from './project.js';
 import type { ViewQuery, ViewResult } from './views.js';
 
 // ============================================================================
@@ -18,6 +18,7 @@ import type { ViewQuery, ViewResult } from './views.js';
  */
 export type ClientMessage =
   | ScanProjectMessage
+  | ImportDemoRepoMessage
   | ScanWorkspaceMessage
   | ViewQueryMessage
   | AnalyzeImportsMessage
@@ -34,6 +35,15 @@ export type ClientMessage =
 export interface ScanProjectMessage {
   readonly type: 'scan_project';
   readonly requestId: string;
+}
+
+/**
+ * Import and scan a curated repository in hosted demo mode.
+ */
+export interface ImportDemoRepoMessage {
+  readonly type: 'import_demo_repo';
+  readonly requestId: string;
+  readonly repoId: string;
 }
 
 /**
@@ -266,4 +276,6 @@ export interface ReadyMessage {
   readonly requestId: string;
   readonly configPresent: boolean;
   readonly hasScannedData: boolean;
+  readonly demoMode: boolean;
+  readonly demoRepositories: readonly DemoRepository[];
 }

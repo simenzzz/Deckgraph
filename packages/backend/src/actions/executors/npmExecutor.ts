@@ -7,7 +7,6 @@
 
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { execa } from 'execa';
 
 import type { PackageActionResult } from '@deckgraph/shared';
 import type {
@@ -17,8 +16,7 @@ import type {
   RemoveOptions,
   UpdateOptions,
 } from '../types.js';
-
-const SUBPROCESS_TIMEOUT_MS = 60_000;
+import { runCommand } from './runCommand.js';
 
 type PackageManager = 'pnpm' | 'npm';
 
@@ -43,14 +41,14 @@ function detectPackageManager(ctx: ExecutorContext): PackageManager {
 /**
  * Map DependencyScope to CLI flags for install/add commands.
  */
-function scopeFlag(pm: PackageManager, scope: string): string[] {
+function scopeFlag(scope: string): string[] {
   switch (scope) {
     case 'dev':
-      return pm === 'pnpm' ? ['--save-dev'] : ['--save-dev'];
+      return ['--save-dev'];
     case 'optional':
-      return pm === 'pnpm' ? ['--save-optional'] : ['--save-optional'];
+      return ['--save-optional'];
     case 'peer':
-      return pm === 'pnpm' ? ['--save-peer'] : ['--save-peer'];
+      return ['--save-peer'];
     default:
       return [];
   }
@@ -58,23 +56,6 @@ function scopeFlag(pm: PackageManager, scope: string): string[] {
 
 function formatCommand(pm: PackageManager, args: readonly string[]): string {
   return `${pm} ${args.join(' ')}`;
-}
-
-async function runCommand(
-  pm: PackageManager,
-  args: readonly string[],
-  cwd: string,
-): Promise<{ success: boolean; stderr: string }> {
-  try {
-    await execa(pm, args, { cwd, timeout: SUBPROCESS_TIMEOUT_MS });
-    return { success: true, stderr: '' };
-  } catch (error: unknown) {
-    const stderr =
-      error !== null && typeof error === 'object' && 'stderr' in error
-        ? String(error.stderr)
-        : String(error);
-    return { success: false, stderr };
-  }
 }
 
 export function createNpmExecutor(): EcosystemExecutor {
@@ -86,8 +67,8 @@ export function createNpmExecutor(): EcosystemExecutor {
       const pkg = `${options.packageName}@${options.targetVersion}`;
       const args =
         pm === 'pnpm'
-          ? ['add', pkg, ...scopeFlag(pm, options.scope)]
-          : ['install', pkg, ...scopeFlag(pm, options.scope)];
+          ? ['add', pkg, ...scopeFlag(options.scope)]
+          : ['install', pkg, ...scopeFlag(options.scope)];
 
       const command = formatCommand(pm, args);
       const { success, stderr } = await runCommand(pm, args, ctx.cwd);
@@ -112,8 +93,8 @@ export function createNpmExecutor(): EcosystemExecutor {
         : options.packageName;
       const args =
         pm === 'pnpm'
-          ? ['add', pkg, ...scopeFlag(pm, options.scope)]
-          : ['install', pkg, ...scopeFlag(pm, options.scope)];
+          ? ['add', pkg, ...scopeFlag(options.scope)]
+          : ['install', pkg, ...scopeFlag(options.scope)];
 
       const command = formatCommand(pm, args);
       const { success, stderr } = await runCommand(pm, args, ctx.cwd);

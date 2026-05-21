@@ -248,3 +248,17 @@ export interface Workspace {
   /** Timestamp of last workspace scan */
   readonly lastScannedAt: string;
 }
+
+/**
+ * Curated repository available in hosted demo mode.
+ */
+export interface DemoRepository {
+  /** Stable identifier used by the WebSocket protocol */
+  readonly id: string;
+  /** Human-readable label shown in the UI */
+  readonly label: string;
+  /** Public GitHub repository URL */
+  readonly url: string;
+  /** Short description for the selection screen */
+  readonly description: string;
+}

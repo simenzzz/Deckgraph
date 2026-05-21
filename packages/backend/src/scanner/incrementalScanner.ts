@@ -5,7 +5,7 @@
  * by re-parsing only changed modules and merging with unchanged data.
  */
 
-import type { AdapterRegistry, Module } from '@deckgraph/shared';
+import type { AdapterRegistry, Dependency, Module } from '@deckgraph/shared';
 import { loadConfig } from '../config/configLoader.js';
 import { discoverModules } from '../discovery/moduleDiscovery.js';
 import { createDefaultRegistry } from '../adapters/index.js';
@@ -18,6 +18,48 @@ import type { ScanResult } from './scanner.js';
 import type { FileChangeEvent } from '../watcher/fileWatcher.js';
 
 const logger = createLogger('incrementalScanner');
+
+/**
+ * Build a fingerprint string for a module's dependencies.
+ * Used to detect whether dependencies actually changed during incremental scan.
+ */
+function depFingerprint(deps: readonly Dependency[]): string {
+  return deps
+    .map((d) => `${d.name}@${d.version}:${d.constraint}:${d.scope}`)
+    .sort()
+    .join('|');
+}
+
+function fileBelongsToModule(filePath: string, modulePath: string): boolean {
+  if (modulePath === '.') return true;
+  return filePath === modulePath || filePath.startsWith(`${modulePath}/`);
+}
+
+function manifestPathSet(modulePath: string, manifests: readonly string[]): Set<string> {
+  const paths = new Set<string>();
+  for (const manifest of manifests) {
+    paths.add(manifest);
+    paths.add(`${modulePath}/${manifest}`);
+  }
+  return paths;
+}
+
+function hasSourceFileChange(
+  modulePath: string,
+  manifests: readonly string[],
+  event: FileChangeEvent,
+): boolean {
+  const manifestPaths = manifestPathSet(modulePath, manifests);
+  const changedFiles = [
+    ...event.changedFiles,
+    ...event.addedFiles,
+    ...event.removedFiles,
+  ];
+
+  return changedFiles.some((filePath) =>
+    fileBelongsToModule(filePath, modulePath) && !manifestPaths.has(filePath),
+  );
+}
 
 /**
  * Options for incremental scanning.
@@ -79,11 +121,23 @@ export async function incrementalScan(
 
   const mergedModules: Module[] = [];
 
-  // Add re-parsed modules (with downgraded analysisState)
+  // Add re-parsed modules, preserving analysisState if deps are unchanged
+  const previousByPath = new Map(previousModules.map((m) => [m.path, m]));
+
   for (const mod of freshModules) {
+    const prevMod = previousByPath.get(mod.path);
+    const depsChanged =
+      !prevMod || depFingerprint(prevMod.dependencies) !== depFingerprint(mod.dependencies);
+    const sourceChanged = hasSourceFileChange(
+      mod.path,
+      [...mod.manifests, ...(prevMod?.manifests ?? [])],
+      event,
+    );
+
     mergedModules.push({
       ...mod,
-      analysisState: 'manifest-only',
+      analysisState:
+        depsChanged || sourceChanged ? 'manifest-only' : prevMod?.analysisState ?? 'manifest-only',
     });
   }
 

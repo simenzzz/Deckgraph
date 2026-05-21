@@ -28,6 +28,7 @@ import type {
   CrossRootVersion,
   CrossRootDependency,
   Workspace,
+  DemoRepository,
 } from '../types/project.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
@@ -169,6 +170,13 @@ export const workspaceSchema = z.object({
   lastScannedAt: z.string().datetime(),
 });
 
+export const demoRepositorySchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+  label: z.string().min(1).max(128),
+  url: z.string().url().max(2048),
+  description: z.string().min(1).max(512),
+});
+
 // ============================================================================
 // Parse Functions
 // ============================================================================
@@ -191,6 +199,7 @@ export const parseWorkspaceConfig = (value: unknown) => workspaceConfigSchema.pa
 export const parseCrossRootVersion = (value: unknown) => crossRootVersionSchema.parse(value);
 export const parseCrossRootDependency = (value: unknown) => crossRootDependencySchema.parse(value);
 export const parseWorkspace = (value: unknown) => workspaceSchema.parse(value);
+export const parseDemoRepository = (value: unknown) => demoRepositorySchema.parse(value);
 
 // ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
@@ -219,6 +228,7 @@ export type _ProjectSchemaAssertions = [
   Expect<z.infer<typeof crossRootVersionSchema> extends CrossRootVersion ? true : false>,
   Expect<z.infer<typeof crossRootDependencySchema> extends CrossRootDependency ? true : false>,
   Expect<z.infer<typeof workspaceSchema> extends Workspace ? true : false>,
+  Expect<z.infer<typeof demoRepositorySchema> extends DemoRepository ? true : false>,
 
   // Reverse direction: Interface ⊆ ZodOutput (catches missing schema fields)
   Expect<Mutable<Ecosystem> extends z.infer<typeof ecosystemSchema> ? true : false>,
@@ -238,4 +248,5 @@ export type _ProjectSchemaAssertions = [
   Expect<Mutable<CrossRootVersion> extends z.infer<typeof crossRootVersionSchema> ? true : false>,
   Expect<Mutable<CrossRootDependency> extends z.infer<typeof crossRootDependencySchema> ? true : false>,
   Expect<Mutable<Workspace> extends z.infer<typeof workspaceSchema> ? true : false>,
+  Expect<Mutable<DemoRepository> extends z.infer<typeof demoRepositorySchema> ? true : false>,
 ];

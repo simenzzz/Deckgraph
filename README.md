@@ -133,6 +133,24 @@ pnpm test
 pnpm test:e2e
 ```
 
+### Hosted Demo Mode
+
+Deckgraph can run as a read-only hosted demo that imports curated public GitHub repositories.
+
+```bash
+pnpm build
+DECKGRAPH_DEMO_REPOS='[
+  {
+    "id": "deckgraph-fixture",
+    "label": "Deckgraph Polyglot Fixture",
+    "url": "https://github.com/simenzzz/Deckgraph.git",
+    "description": "A compact repository with npm, PyPI, Go, Cargo, and Maven modules."
+  }
+]' node packages/backend/dist/index.js --demo --host 0.0.0.0 --port 3333 --no-open --no-watch
+```
+
+In demo mode the UI shows repository choices instead of the local scan button. Package install, update, remove, and batch actions are disabled so public visitors can explore scan results without mutating cloned repositories.
+
 ### Project Structure
 
 ```

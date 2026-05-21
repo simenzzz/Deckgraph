@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { DependencyList } from '@/components/explorer/DependencyList';
 import { useViewStore } from '@/stores/viewStore';
 import { useDetailStore } from '@/stores/detailStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 import type { ViewResult } from '@deckgraph/shared';
 
 const mockResult: ViewResult = {
@@ -40,6 +41,15 @@ describe('DependencyList', () => {
       currentView: 'explorer',
     });
     useDetailStore.setState({ selectedDep: null, isEnriching: false });
+    useConnectionStore.setState({
+      status: 'connected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: true,
+      hasScannedData: true,
+      demoMode: false,
+      demoRepositories: [],
+    });
   });
 
   it('shows prompt when no module selected', () => {
@@ -85,5 +95,14 @@ describe('DependencyList', () => {
 
     expect(screen.getByTestId('dep-link-react')).toBeInTheDocument();
     expect(screen.getByTestId('dep-link-vitest')).toBeInTheDocument();
+  });
+
+  it('hides install controls in hosted demo mode', () => {
+    useConnectionStore.setState({ demoMode: true });
+    useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
+
+    render(<DependencyList wsClient={null} />);
+
+    expect(screen.queryByTestId('install-package-button')).not.toBeInTheDocument();
   });
 });

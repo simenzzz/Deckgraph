@@ -10,6 +10,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useViewStore } from '@/stores/viewStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { resetScanSession } from './sessionReset';
 
 /**
  * Dispatch a validated server message to the correct store.
@@ -22,14 +23,6 @@ export function dispatchServerMessage(message: ServerMessage): void {
 
     case 'workspace_overview': {
       useWorkspaceStore.getState().setWorkspace(message.data);
-      // Set active project (or first) as the current project for compatibility
-      const activeRoot = useWorkspaceStore.getState().activeProjectRoot;
-      const activeProject = message.data.projects.find((p) => p.root === activeRoot);
-      const fallback = message.data.projects[0];
-      const project = activeProject ?? fallback;
-      if (project) {
-        useProjectStore.getState().setProject(project);
-      }
       break;
     }
 
@@ -48,7 +41,15 @@ export function dispatchServerMessage(message: ServerMessage): void {
       break;
 
     case 'ready':
-      useConnectionStore.getState().setReady(message.configPresent, message.hasScannedData);
+      useConnectionStore.getState().setReady(
+        message.configPresent,
+        message.hasScannedData,
+        message.demoMode,
+        message.demoRepositories,
+      );
+      if (!message.hasScannedData) {
+        resetScanSession();
+      }
       break;
 
     case 'module_updated':

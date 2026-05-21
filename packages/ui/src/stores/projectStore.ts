@@ -20,6 +20,7 @@ export interface ProjectActions {
   updateModule: (updated: Module) => void;
   updateDependency: (updated: Dependency) => void;
   setFileChangeInProgress: (inProgress: boolean) => void;
+  clearScanProgress: () => void;
   clear: () => void;
 }
 
@@ -79,6 +80,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   setFileChangeInProgress: (inProgress) =>
     set((state) => ({ ...state, fileChangeInProgress: inProgress })),
+
+  clearScanProgress: () =>
+    set((state) => ({ ...state, isScanning: false, lastProgress: null, fileChangeInProgress: false })),
 
   clear: () =>
     set(() => ({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false })),

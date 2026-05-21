@@ -8,7 +8,6 @@
 import { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Dependency } from '@deckgraph/shared';
-import { TableHead } from '@/components/ui/table';
 import { ScopeBadge } from './ScopeBadge';
 import { ConcernBadge } from './ConcernBadge';
 import { DependencyActions } from './DependencyActions';

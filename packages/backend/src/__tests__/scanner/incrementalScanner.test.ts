@@ -114,11 +114,86 @@ describe('incrementalScanner', () => {
     // Both modules should be present
     expect(result.project.modules).toHaveLength(2);
 
-    // The re-parsed module should have 'manifest-only' state
+    // Source changes may alter imports, so analysis must be re-run
     const apiModule = result.project.modules.find((m) => m.path === 'services/api');
     expect(apiModule?.analysisState).toBe('manifest-only');
 
     // The unchanged module should retain its previous state
+    const authModule = result.project.modules.find((m) => m.path === 'services/auth');
+    expect(authModule?.analysisState).toBe('imports-resolved');
+  });
+
+  it('should preserve analysisState for manifest changes when deps are unchanged', async () => {
+    const prev = makePreviousResult();
+    const event: FileChangeEvent = {
+      changedFiles: ['services/api/package.json'],
+      addedFiles: [],
+      removedFiles: [],
+      affectedModules: ['services/api'],
+    };
+
+    vi.mocked(discoverModules).mockResolvedValue([
+      { path: 'services/api', ecosystem: 'npm', manifests: ['package.json'] },
+      { path: 'services/auth', ecosystem: 'npm', manifests: ['package.json'] },
+    ]);
+
+    const result = await incrementalScan({
+      projectRoot: '/test',
+      previousResult: prev,
+      event,
+      registry: mockRegistry,
+    });
+
+    const apiModule = result.project.modules.find((m) => m.path === 'services/api');
+    expect(apiModule?.analysisState).toBe('imports-resolved');
+  });
+
+  it('should downgrade analysisState when deps change', async () => {
+    const prev = makePreviousResult();
+    const event: FileChangeEvent = {
+      changedFiles: ['services/api/package.json'],
+      addedFiles: [],
+      removedFiles: [],
+      affectedModules: ['services/api'],
+    };
+
+    // Return different deps than the previous module
+    const changedAdapter: EcosystemAdapter = {
+      parseManifests: vi.fn(() =>
+        Promise.resolve({
+          moduleName: 'api',
+          dependencies: [{ name: 'dep-b', version: '2.0.0', constraint: '^2.0.0', scope: 'runtime' }],
+          hasLockFile: false,
+          metadata: {},
+        }),
+      ),
+      analyzeImports: vi.fn(),
+      queryRegistry: vi.fn(),
+    };
+
+    const changedRegistry: AdapterRegistry = {
+      getAdapterForManifest: vi.fn(() => changedAdapter),
+      getAdapterForExtension: vi.fn(() => null),
+      getRegisteredEcosystems: vi.fn(() => ['npm']),
+    };
+
+    vi.mocked(discoverModules).mockResolvedValue([
+      { path: 'services/api', ecosystem: 'npm', manifests: ['services/api/package.json'] },
+      { path: 'services/auth', ecosystem: 'npm', manifests: ['services/auth/package.json'] },
+    ]);
+
+    const result = await incrementalScan({
+      projectRoot: '/test',
+      previousResult: prev,
+      event,
+      registry: changedRegistry,
+    });
+
+    // Changed deps should downgrade to manifest-only
+    const apiModule = result.project.modules.find((m) => m.path === 'services/api');
+    expect(apiModule?.analysisState).toBe('manifest-only');
+
+    // Unchanged module keeps its state
     const authModule = result.project.modules.find((m) => m.path === 'services/auth');
     expect(authModule?.analysisState).toBe('imports-resolved');
   });

@@ -10,6 +10,7 @@ import type { Dependency, OutdatedSeverity } from '@deckgraph/shared';
 import type { PackageUpdateAction } from '@/hooks/usePackageAction';
 import { Button } from '@/components/ui/button';
 import { UpdateConfirmation } from './UpdateConfirmation';
+import { useConnectionStore } from '@/stores';
 
 interface UpdateButtonProps {
   readonly dependency: Dependency;
@@ -25,9 +26,10 @@ export function UpdateButton({
   updateAction,
 }: UpdateButtonProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const demoMode = useConnectionStore((s) => s.demoMode);
 
   // Only show the update button if we have registry data and the dep is outdated
-  if (!dependency.registryMeta || !outdatedSeverity || outdatedSeverity === 'up-to-date') {
+  if (demoMode || !dependency.registryMeta || !outdatedSeverity || outdatedSeverity === 'up-to-date') {
     return null;
   }
 

@@ -16,6 +16,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { createServer } from './ws/index.js';
+import { parseDemoRepositories } from './ws/demoRepository.js';
 import { createLogger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,8 +49,10 @@ export function createProgram(): Command {
     .name('deckgraph')
     .description('Multi-language dependency exploration and audit tool')
     .version(getVersion())
-    .requiredOption('--project <path>', 'Path to the project root')
+    .option('--project <path>', 'Path to the project root')
     .option('--port <number>', 'WebSocket server port', '3333')
+    .option('--host <host>', 'Host to bind to', '127.0.0.1')
+    .option('--demo', 'Run hosted demo mode with curated GitHub repositories')
     .option('--no-open', 'Skip opening browser')
     .option('--no-watch', 'Disable file watching')
     .addHelpText('after', `
@@ -76,13 +79,16 @@ export async function main(argv?: readonly string[]): Promise<void> {
   program.parse(argv as string[] | undefined);
 
   const opts = program.opts<{
-    project: string;
+    project?: string;
     port: string;
+    host: string;
+    demo?: boolean;
     open: boolean;
     watch: boolean;
   }>();
 
-  const projectRoot = resolve(opts.project);
+  const demoMode = opts.demo === true;
+  const projectRoot = resolve(opts.project ?? process.cwd());
   const port = parseInt(opts.port, 10);
 
   if (isNaN(port) || port < 0 || port > 65535) {
@@ -90,19 +96,35 @@ export async function main(argv?: readonly string[]): Promise<void> {
     process.exit(1);
   }
 
-  try {
-    const stats = await stat(projectRoot);
-    if (!stats.isDirectory()) {
-      process.stderr.write(`Error: "${projectRoot}" is not a directory\n`);
-      process.exit(1);
-    }
-  } catch {
-    process.stderr.write(`Error: "${projectRoot}" does not exist\n`);
+  if (!demoMode && !opts.project) {
+    process.stderr.write('Error: --project <path> is required unless --demo is used\n');
     process.exit(1);
   }
 
+  if (!demoMode) {
+    try {
+      const stats = await stat(projectRoot);
+      if (!stats.isDirectory()) {
+        process.stderr.write(`Error: "${projectRoot}" is not a directory\n`);
+        process.exit(1);
+      }
+    } catch {
+      process.stderr.write(`Error: "${projectRoot}" does not exist\n`);
+      process.exit(1);
+    }
+  }
+
   const uiDistPath = resolve(__dirname, '../../ui/dist');
-  const server = createServer({ port, projectRoot, uiDistPath, noWatch: !opts.watch });
+  const server = createServer({
+    port,
+    host: opts.host,
+    projectRoot,
+    uiDistPath,
+    noWatch: !opts.watch || demoMode,
+    demoMode,
+    demoRepositories: demoMode ? parseDemoRepositories(process.env.DECKGRAPH_DEMO_REPOS) : [],
+    demoCacheDir: process.env.DECKGRAPH_DEMO_CACHE_DIR ?? '/tmp/deckgraph-demo-cache',
+  });
 
   const shutdown = async (): Promise<void> => {
     logger.info('Shutting down...');
@@ -115,12 +137,12 @@ export async function main(argv?: readonly string[]): Promise<void> {
 
   await server.start();
 
-  process.stdout.write(`Server listening on http://127.0.0.1:${port}\n`);
+  process.stdout.write(`Server listening on http://${opts.host}:${port}\n`);
 
   if (opts.open) {
     try {
       const open = await import('open');
-      await open.default(`http://127.0.0.1:${port}`);
+      await open.default(`http://${opts.host}:${port}`);
     } catch {
       logger.debug('Could not open browser automatically');
     }

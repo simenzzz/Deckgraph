@@ -5,7 +5,7 @@
  */
 
 import type WebSocket from 'ws';
-import type { AdapterRegistry, ImportPackageMap } from '@deckgraph/shared';
+import type { AdapterRegistry, DemoRepository, ImportPackageMap } from '@deckgraph/shared';
 import type { ExecutorRegistry } from '../actions/types.js';
 import type { ScanResult } from '../scanner/scanner.js';
 import type { WorkspaceScanResult } from '../scanner/workspaceScanner.js';
@@ -42,6 +42,12 @@ export interface ServerState {
   readonly executorRegistry: ExecutorRegistry;
   /** Per-module locks preventing concurrent package operations (modulePath → requestId) */
   moduleActionLocks: Map<string, string>;
+  /** Hosted demo mode disables local project mutation and scans curated cloned repos per client */
+  readonly demoMode: boolean;
+  /** Curated repositories available in hosted demo mode */
+  readonly demoRepositories: readonly DemoRepository[];
+  /** Directory used for cloned demo repositories */
+  readonly demoCacheDir: string;
 }
 
 /**
@@ -50,6 +56,12 @@ export interface ServerState {
 export interface ClientConnection {
   readonly ws: WebSocket;
   readonly clientId: string;
+  /** Per-client scan state used in hosted demo mode */
+  scanResult: ScanResult | null;
+  /** Root path of the imported demo repository, if any */
+  projectRoot: string | null;
+  /** Request currently importing/scanning a demo repository for this connection */
+  demoImportRequestId: string | null;
 }
 
 /**

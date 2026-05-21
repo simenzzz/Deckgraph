@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { ProjectOverview } from '@/components/overview/ProjectOverview';
 import { useProjectStore } from '@/stores/projectStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useViewStore } from '@/stores/viewStore';
 import { useFilterStore } from '@/stores/filterStore';
+import { useWorkspaceStore } from '@/stores/workspaceStore';
 import type { Project } from '@deckgraph/shared';
+import type { WsClient } from '@/lib/wsClient';
 
 const mockProject: Project = {
   root: '/test/project',
@@ -20,11 +22,29 @@ const mockProject: Project = {
   lastScannedAt: '2024-01-01T00:00:00.000Z',
 };
 
+function createMockWsClient(): WsClient {
+  return {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    send: vi.fn(() => true),
+    getStatus: vi.fn(() => 'connected' as const),
+  };
+}
+
 describe('ProjectOverview', () => {
   beforeEach(() => {
-    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
-    useConnectionStore.setState({ status: 'connected', lastError: null });
+    useProjectStore.setState({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false });
+    useConnectionStore.setState({
+      status: 'connected',
+      lastError: null,
+      lastErrorSuggestion: null,
+      configPresent: true,
+      hasScannedData: false,
+      demoMode: false,
+      demoRepositories: [],
+    });
     useViewStore.setState({ result: null, isLoading: false, selectedModulePath: null, currentView: 'overview' });
+    useWorkspaceStore.setState({ workspace: null, activeProjectRoot: null });
     useFilterStore.getState().resetFilters();
   });
 
@@ -35,12 +55,75 @@ describe('ProjectOverview', () => {
     expect(screen.getByText('No project scanned')).toBeInTheDocument();
   });
 
+  it('shows demo repository choices in hosted demo mode', () => {
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [{
+        id: 'deckgraph-fixture',
+        label: 'Deckgraph Fixture',
+        url: 'https://github.com/simenzzz/Deckgraph.git',
+        description: 'A public demo repository.',
+      }],
+    });
+
+    render(<ProjectOverview wsClient={null} />);
+
+    expect(screen.getByRole('heading', { name: /choose a repository to scan/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /deckgraph fixture/i })).toBeInTheDocument();
+  });
+
+  it('sends import_demo_repo when a demo repository is selected', () => {
+    const client = createMockWsClient();
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [{
+        id: 'deckgraph-fixture',
+        label: 'Deckgraph Fixture',
+        url: 'https://github.com/simenzzz/Deckgraph.git',
+        description: 'A public demo repository.',
+      }],
+    });
+
+    render(<ProjectOverview wsClient={client} />);
+    fireEvent.click(screen.getByRole('button', { name: /import demo/i }));
+
+    expect(client.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'import_demo_repo',
+      repoId: 'deckgraph-fixture',
+    }));
+  });
+
   it('shows ecosystem cards when project is loaded', () => {
     useProjectStore.setState({ project: mockProject });
     render(<ProjectOverview wsClient={null} />);
     // Both npm and PyPI cards should be present
     expect(screen.getByText('npm')).toBeInTheDocument();
     expect(screen.getByText('PyPI')).toBeInTheDocument();
+  });
+
+  it('shows a workspace-level overview when all projects are selected', () => {
+    const secondProject: Project = {
+      ...mockProject,
+      root: '/test/service',
+      modules: [
+        { path: 'service', name: 'service', ecosystem: 'go', manifests: ['go.mod'], dependencies: [], analysisState: 'manifest-only' },
+      ],
+    };
+    useWorkspaceStore.setState({
+      workspace: {
+        config: null,
+        projects: [mockProject, secondProject],
+        crossRootDeps: [],
+        lastScannedAt: '2024-01-01T00:00:00.000Z',
+      },
+      activeProjectRoot: null,
+    });
+
+    render(<ProjectOverview wsClient={null} />);
+
+    expect(screen.getByRole('heading', { name: /workspace overview/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /npm: 1 module/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /go: 1 module/i })).toBeInTheDocument();
   });
 
   it('shows health summary', () => {
