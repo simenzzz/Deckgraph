@@ -1,0 +1,23 @@
+previews:
+  generation: off
+
+services:
+  - type: web
+    name: deckgraph-demo
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: commit
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 3333
+      - key: DECKGRAPH_DEMO_CACHE_DIR
+        value: /tmp/deckgraph-demo-cache
+      - key: DECKGRAPH_LOG_LEVEL
+        value: info
+      - key: DECKGRAPH_DEMO_REPOS
+        value: >-
+          [{"id":"deckgraph-fixture","label":"Deckgraph Polyglot Fixture","url":"https://github.com/simenzzz/Deckgraph.git","description":"A compact repository with npm, PyPI, Go, Cargo, and Maven modules."}]
