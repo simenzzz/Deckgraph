@@ -6,5 +6,7 @@ coverage
 **/coverage
 .git
 .turbo
+**/.turbo
+**/*.tsbuildinfo
 playwright-report
 test-results

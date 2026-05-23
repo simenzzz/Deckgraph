@@ -151,6 +151,45 @@ DECKGRAPH_DEMO_REPOS='[
 
 In demo mode the UI shows repository choices instead of the local scan button. Package install, update, remove, and batch actions are disabled so public visitors can explore scan results without mutating cloned repositories.
 
+### Deploy Demo Mode on Render
+
+This repository includes a Render Blueprint at `render.yaml`. It builds the Docker image, serves the built React UI from the backend process, and starts Deckgraph in hosted demo mode.
+
+1. Confirm the app builds locally:
+
+   ```bash
+   pnpm build
+   ```
+
+2. Push the current branch to GitHub:
+
+   ```bash
+   git push origin main
+   ```
+
+3. In Render, create a new Blueprint and connect the GitHub repository:
+
+   ```text
+   https://github.com/simenzzz/Deckgraph
+   ```
+
+4. Keep the Blueprint path as `render.yaml`, review the generated `deckgraph-demo` web service, and deploy it.
+
+5. After the first deploy finishes, open:
+
+   ```text
+   https://deckgraph-demo.onrender.com
+   ```
+
+6. Verify the hosted flow:
+
+   - The Deckgraph UI loads at `/`.
+   - The demo repository picker is visible.
+   - Importing `Deckgraph Polyglot Fixture` completes a scan.
+   - Install, update, remove, and batch actions stay hidden or disabled.
+
+Render free instances can spin down after inactivity. The first request after a quiet period may take longer while the service wakes and reuses or recreates the `/tmp/deckgraph-demo-cache` clone cache.
+
 ### Project Structure
 
 ```
