@@ -33,7 +33,7 @@ export function ModuleExplorer({ wsClient }: ModuleExplorerProps) {
       <FilterBar />
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="w-1/2 overflow-auto rounded-lg border">
-          <ModuleList />
+          <ModuleList wsClient={wsClient} />
         </div>
         <Separator orientation="vertical" />
         <div className="w-1/2 overflow-auto rounded-lg border p-3">

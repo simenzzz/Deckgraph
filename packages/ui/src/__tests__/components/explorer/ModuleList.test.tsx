@@ -1,8 +1,18 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ModuleList } from '@/components/explorer/ModuleList';
 import { useViewStore } from '@/stores/viewStore';
 import type { ViewResult } from '@deckgraph/shared';
+import type { WsClient } from '@/lib/wsClient';
+
+function createMockWsClient() {
+  return {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    send: vi.fn().mockReturnValue(true),
+    getStatus: vi.fn().mockReturnValue('connected' as const),
+  };
+}
 
 const mockResult: ViewResult = {
   modules: [
@@ -44,24 +54,26 @@ describe('ModuleList', () => {
       isLoading: false,
       selectedModulePath: null,
       currentView: 'explorer',
+      analyzingModulePath: null,
+      analysisRequestId: null,
     });
   });
 
   it('shows empty state when no modules', () => {
-    render(<ModuleList />);
+    render(<ModuleList wsClient={null} />);
     expect(screen.getByText(/No modules match/)).toBeInTheDocument();
   });
 
   it('renders module rows', () => {
     useViewStore.setState({ result: mockResult });
-    render(<ModuleList />);
+    render(<ModuleList wsClient={null} />);
     expect(screen.getByText('backend')).toBeInTheDocument();
     expect(screen.getByText('lib')).toBeInTheDocument();
   });
 
   it('selects module on click', () => {
     useViewStore.setState({ result: mockResult });
-    render(<ModuleList />);
+    render(<ModuleList wsClient={null} />);
 
     fireEvent.click(screen.getByTestId('module-packages/backend'));
     expect(useViewStore.getState().selectedModulePath).toBe('packages/backend');
@@ -69,9 +81,23 @@ describe('ModuleList', () => {
 
   it('shows dep count with filtered/total', () => {
     useViewStore.setState({ result: mockResult });
-    render(<ModuleList />);
+    render(<ModuleList wsClient={null} />);
     // Verify through test id
     const row = screen.getByTestId('module-packages/backend');
     expect(row.textContent).toContain('/5');
+  });
+
+  it('sends analyze_imports for manifest-only modules', () => {
+    const client = createMockWsClient();
+    useViewStore.setState({ result: mockResult });
+    render(<ModuleList wsClient={client as unknown as WsClient} />);
+
+    fireEvent.click(screen.getByTestId('analyze-module-packages/backend'));
+
+    expect(client.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'analyze_imports',
+      modulePath: 'packages/backend',
+    }));
+    expect(useViewStore.getState().analyzingModulePath).toBe('packages/backend');
   });
 });

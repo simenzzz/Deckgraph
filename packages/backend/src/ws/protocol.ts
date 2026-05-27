@@ -11,6 +11,7 @@ import type {
   ServerMessage,
   NotificationMessage,
   ProjectOverviewMessage,
+  DemoRepositoryImportedMessage,
   WorkspaceOverviewMessage,
   ViewResultMessage,
   ModuleUpdatedMessage,
@@ -21,6 +22,7 @@ import type {
   DependencyScope,
   ViewQuery,
   PackageBatchOperation,
+  DemoRepository,
 } from '@deckgraph/shared';
 import { clientMessageSchema } from '@deckgraph/shared';
 import { updatePackage, installPackage, removePackage } from '../actions/packageManager.js';
@@ -39,7 +41,7 @@ import { discoverRoots } from '../discovery/workspaceDiscovery.js';
 import { runHooksForEvent } from '../hooks/notifier.js';
 import { createLogger } from '../logger.js';
 import { ErrorCatalog, createCatalogError, mapError } from '../errors/index.js';
-import { importDemoRepository } from './demoRepository.js';
+import { importDemoRepository, importPublicGithubRepository } from './demoRepository.js';
 import type { ClientConnection, ProgressEmitter, ServerState } from './types.js';
 
 const logger = createLogger('protocol');
@@ -47,6 +49,7 @@ const logger = createLogger('protocol');
 const VALID_TYPES = [
   'scan_project',
   'import_demo_repo',
+  'import_public_github_repo',
   'scan_workspace',
   'view_query',
   'sync',
@@ -118,6 +121,15 @@ async function dispatch(
         return await handleImportDemoRepo(
           message.requestId,
           message.repoId,
+          connection,
+          state,
+          emitProgress,
+        );
+
+      case 'import_public_github_repo':
+        return await handleImportPublicGithubRepo(
+          message.requestId,
+          message.url,
           connection,
           state,
           emitProgress,
@@ -295,7 +307,7 @@ async function handleImportDemoRepo(
   try {
     const imported = await importDemoRepository({
       repoId,
-      repositories: state.demoRepositories,
+      repositories: getAvailableDemoRepositories(connection, state),
       cacheDir: state.demoCacheDir,
     });
 
@@ -317,6 +329,74 @@ async function handleImportDemoRepo(
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.warn({ repoId, error: detail }, 'Demo repository import failed');
+    return createCatalogError(ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE, requestId);
+  } finally {
+    if (connection.demoImportRequestId === requestId) {
+      connection.demoImportRequestId = null;
+    }
+  }
+}
+
+/**
+ * Handle import_public_github_repo: clone a user-provided public GitHub repository,
+ * scan it immediately, and add it to this connection's demo repository list.
+ */
+async function handleImportPublicGithubRepo(
+  requestId: string,
+  url: string,
+  connection: ClientConnection,
+  state: ServerState,
+  emitProgress: ProgressEmitter,
+): Promise<ServerMessage> {
+  if (!state.demoMode) {
+    return createCatalogError(ErrorCatalog.VALIDATION_FAILED, requestId, 'demo mode is not enabled');
+  }
+
+  if (connection.demoImportRequestId) {
+    return createCatalogError(ErrorCatalog.SCAN_ALREADY_RUNNING, requestId);
+  }
+
+  if (connection.customDemoRepositories.length >= 5) {
+    return createCatalogError(
+      ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE,
+      requestId,
+      'too many custom repositories in this session',
+    );
+  }
+
+  connection.demoImportRequestId = requestId;
+  emitProgress(requestId, 'Importing public GitHub repository...', 0);
+
+  try {
+    const imported = await importPublicGithubRepository({
+      url,
+      cacheDir: state.demoCacheDir,
+      existingRepositories: getAvailableDemoRepositories(connection, state),
+    });
+
+    emitProgress(requestId, `Scanning ${imported.repository.label}...`, 0);
+    const result = await scanProject({ projectRoot: imported.path });
+
+    connection.customDemoRepositories = upsertDemoRepository(
+      connection.customDemoRepositories,
+      imported.repository,
+    );
+    connection.projectRoot = imported.path;
+    connection.scanResult = result;
+
+    emitProgress(requestId, 'Public GitHub repository ready', 1);
+
+    const overview: DemoRepositoryImportedMessage = {
+      type: 'demo_repository_imported',
+      requestId,
+      repository: imported.repository,
+      data: result.project,
+    };
+
+    return overview;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'unknown error';
+    logger.warn({ url, error: detail }, 'Public GitHub repository import failed');
     return createCatalogError(ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE, requestId);
   } finally {
     if (connection.demoImportRequestId === requestId) {
@@ -910,6 +990,23 @@ function getActiveProjectRoot(
   state: ServerState,
 ): string {
   return state.demoMode && connection.projectRoot ? connection.projectRoot : state.projectRoot;
+}
+
+function getAvailableDemoRepositories(
+  connection: ClientConnection,
+  state: ServerState,
+): readonly DemoRepository[] {
+  return [...state.demoRepositories, ...connection.customDemoRepositories];
+}
+
+function upsertDemoRepository(
+  repositories: readonly DemoRepository[],
+  repository: DemoRepository,
+): DemoRepository[] {
+  return [
+    ...repositories.filter((existing) => existing.id !== repository.id),
+    repository,
+  ];
 }
 
 /**

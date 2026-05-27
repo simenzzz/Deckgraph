@@ -46,9 +46,16 @@ describe('dispatchServerMessage', () => {
       demoRepositories: [],
     });
     useProjectStore.setState({ project: null, isScanning: false, lastProgress: null, fileChangeInProgress: false });
-    useViewStore.setState({ result: null, isLoading: false, selectedModulePath: null, currentView: 'overview' });
+    useViewStore.setState({
+      result: null,
+      isLoading: false,
+      selectedModulePath: null,
+      currentView: 'overview',
+      analyzingModulePath: null,
+      analysisRequestId: null,
+    });
     useWorkspaceStore.setState({ workspace: null, activeProjectRoot: null });
-    useDetailStore.setState({ selectedDep: null, isEnriching: false });
+    useDetailStore.setState({ selectedDep: null, isEnriching: false, enrichmentRequestId: null });
     useActionStore.setState({
       inProgress: new Map(),
       lastResult: null,
@@ -66,6 +73,47 @@ describe('dispatchServerMessage', () => {
 
     dispatchServerMessage(msg);
     expect(useProjectStore.getState().project).toEqual(mockProject);
+  });
+
+  it('dispatches demo_repository_imported to connectionStore and projectStore', () => {
+    const customRepository = {
+      id: 'custom-example-demo-repo',
+      label: 'example/demo-repo',
+      url: 'https://github.com/example/demo-repo.git',
+      description: 'README snippet from the imported repository.',
+    };
+
+    dispatchServerMessage({
+      type: 'demo_repository_imported',
+      requestId: 'custom-1',
+      repository: customRepository,
+      data: mockProject,
+    });
+
+    expect(useConnectionStore.getState().demoRepositories).toEqual([customRepository]);
+    expect(useProjectStore.getState().project).toEqual(mockProject);
+    expect(useProjectStore.getState().isScanning).toBe(false);
+  });
+
+  it('dedupes demo_repository_imported repository cards by id', () => {
+    const customRepository = {
+      id: 'custom-example-demo-repo',
+      label: 'example/demo-repo',
+      url: 'https://github.com/example/demo-repo.git',
+      description: 'Updated README snippet.',
+    };
+    useConnectionStore.setState({
+      demoRepositories: [{ ...customRepository, description: 'Old snippet.' }],
+    });
+
+    dispatchServerMessage({
+      type: 'demo_repository_imported',
+      requestId: 'custom-1',
+      repository: customRepository,
+      data: mockProject,
+    });
+
+    expect(useConnectionStore.getState().demoRepositories).toEqual([customRepository]);
   });
 
   it('dispatches view_result to viewStore', () => {
@@ -106,6 +154,43 @@ describe('dispatchServerMessage', () => {
     dispatchServerMessage(msg);
     expect(useConnectionStore.getState().lastError).toBe('Something failed');
     expect(useViewStore.getState().isLoading).toBe(false);
+  });
+
+  it('clears scan progress when error matches active progress request', () => {
+    useProjectStore.getState().setProgress({
+      type: 'progress',
+      requestId: 'scan-1',
+      message: 'Importing demo repository...',
+      phase: 0,
+    });
+
+    dispatchServerMessage({
+      type: 'error',
+      requestId: 'scan-1',
+      message: 'Demo repository unavailable',
+      suggestion: 'Choose one of the listed demo repositories and try again',
+    });
+
+    expect(useProjectStore.getState().isScanning).toBe(false);
+    expect(useProjectStore.getState().lastProgress).toBeNull();
+  });
+
+  it('does not clear scan progress for unrelated errors', () => {
+    useProjectStore.getState().setProgress({
+      type: 'progress',
+      requestId: 'scan-1',
+      message: 'Importing demo repository...',
+      phase: 0,
+    });
+
+    dispatchServerMessage({
+      type: 'error',
+      requestId: 'other-1',
+      message: 'Package not found',
+      suggestion: 'Check the package name',
+    });
+
+    expect(useProjectStore.getState().isScanning).toBe(true);
   });
 
   it('dispatches module_updated to projectStore', () => {
@@ -186,7 +271,7 @@ describe('dispatchServerMessage', () => {
       }],
     });
 
-    useDetailStore.setState({ isEnriching: true });
+    useDetailStore.getState().startEnriching('r1');
 
     const msg: ServerMessage = {
       type: 'dependency_enriched',
@@ -201,6 +286,26 @@ describe('dispatchServerMessage', () => {
     expect(dep?.registryMeta?.latestVersion).toBe('19.1.0');
 
     // Check detailStore enriching was cleared
+    expect(useDetailStore.getState().isEnriching).toBe(false);
+  });
+
+  it('clears matching enrichment on error without clearing unrelated enrichment', () => {
+    useDetailStore.getState().startEnriching('enrich-1');
+
+    dispatchServerMessage({
+      type: 'error',
+      requestId: 'other-1',
+      message: 'No scan data available',
+      suggestion: 'Run a scan_project request first',
+    });
+    expect(useDetailStore.getState().isEnriching).toBe(true);
+
+    dispatchServerMessage({
+      type: 'error',
+      requestId: 'enrich-1',
+      message: 'Package not found',
+      suggestion: 'Check the package name',
+    });
     expect(useDetailStore.getState().isEnriching).toBe(false);
   });
 
@@ -304,7 +409,11 @@ describe('dispatchServerMessage', () => {
       },
       activeProjectRoot: '/test',
     });
-    useDetailStore.setState({ selectedDep: { name: 'react', ecosystem: 'npm' }, isEnriching: true });
+    useDetailStore.setState({
+      selectedDep: { name: 'react', ecosystem: 'npm' },
+      isEnriching: true,
+      enrichmentRequestId: 'req-enrich',
+    });
     useActionStore.getState().startAction('pkg/a', 'req-1');
 
     dispatchServerMessage({

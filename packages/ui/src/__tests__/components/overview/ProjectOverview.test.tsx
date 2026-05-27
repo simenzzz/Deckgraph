@@ -72,6 +72,17 @@ describe('ProjectOverview', () => {
     expect(screen.getByRole('heading', { name: /deckgraph fixture/i })).toBeInTheDocument();
   });
 
+  it('shows a fallback when hosted demo mode has no repositories', () => {
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [],
+    });
+
+    render(<ProjectOverview wsClient={null} />);
+
+    expect(screen.getByText('No demo repositories configured')).toBeInTheDocument();
+  });
+
   it('sends import_demo_repo when a demo repository is selected', () => {
     const client = createMockWsClient();
     useConnectionStore.setState({
@@ -91,6 +102,56 @@ describe('ProjectOverview', () => {
       type: 'import_demo_repo',
       repoId: 'deckgraph-fixture',
     }));
+  });
+
+  it('sends import_public_github_repo when a public GitHub URL is submitted', () => {
+    const client = createMockWsClient();
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [{
+        id: 'deckgraph-fixture',
+        label: 'Deckgraph Fixture',
+        url: 'https://github.com/simenzzz/Deckgraph.git',
+        description: 'A public demo repository.',
+      }],
+    });
+
+    render(<ProjectOverview wsClient={client} />);
+    fireEvent.change(screen.getByLabelText(/public github repository url/i), {
+      target: { value: 'https://github.com/example/demo-repo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /scan github repo/i }));
+
+    expect(client.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'import_public_github_repo',
+      url: 'https://github.com/example/demo-repo',
+    }));
+  });
+
+  it('renders session custom repositories next to curated demo repositories', () => {
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [
+        {
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'A public demo repository.',
+        },
+        {
+          id: 'custom-example-demo-repo',
+          label: 'example/demo-repo',
+          url: 'https://github.com/example/demo-repo.git',
+          description: 'README snippet from the imported repository.',
+        },
+      ],
+    });
+
+    render(<ProjectOverview wsClient={null} />);
+
+    expect(screen.getByRole('heading', { name: /deckgraph fixture/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /example\/demo-repo/i })).toBeInTheDocument();
+    expect(screen.getByText('README snippet from the imported repository.')).toBeInTheDocument();
   });
 
   it('shows ecosystem cards when project is loaded', () => {

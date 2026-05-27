@@ -6,21 +6,25 @@
  */
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ErrorCard } from '@/components/errors';
 import { WelcomeScreen } from '@/components/onboarding';
 import { useConnectionStore } from '@/stores';
 import { useProjectStore } from '@/stores/projectStore';
 import type { WsClient } from '@/lib/wsClient';
 import { createRequestId } from '@/lib/wsClient';
-import { Github, Play } from 'lucide-react';
+import { Github, Link, Play } from 'lucide-react';
+import { type FormEvent, useState } from 'react';
 
 export interface ScanPromptProps {
   readonly wsClient: WsClient | null;
 }
 
 export function ScanPrompt({ wsClient }: ScanPromptProps) {
+  const [repoUrl, setRepoUrl] = useState('');
   const status = useConnectionStore((s) => s.status);
   const isScanning = useProjectStore((s) => s.isScanning);
+  const lastProgress = useProjectStore((s) => s.lastProgress);
   const lastError = useConnectionStore((s) => s.lastError);
   const lastErrorSuggestion = useConnectionStore((s) => s.lastErrorSuggestion);
   const configPresent = useConnectionStore((s) => s.configPresent);
@@ -40,6 +44,19 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
     if (!wsClient || status !== 'connected' || isScanning) return;
     clearError();
     wsClient.send({ type: 'import_demo_repo', requestId: createRequestId(), repoId });
+  };
+
+  const handlePublicRepoSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const url = repoUrl.trim();
+    if (!url || !wsClient || status !== 'connected' || isScanning) return;
+
+    clearError();
+    wsClient.send({
+      type: 'import_public_github_repo',
+      requestId: createRequestId(),
+      url,
+    });
   };
 
   if (demoMode) {
@@ -65,28 +82,73 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
           />
         )}
 
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {demoRepositories.map((repo) => (
-            <article
-              key={repo.id}
-              className="flex min-h-44 flex-col justify-between rounded-lg border bg-card p-4 shadow-sm"
-            >
-              <div className="space-y-2">
-                <h3 className="text-base font-semibold">{repo.label}</h3>
-                <p className="text-sm leading-6 text-muted-foreground">{repo.description}</p>
-                <p className="truncate text-xs text-muted-foreground">{repo.url}</p>
-              </div>
-              <Button
-                className="mt-4 self-start gap-2"
-                onClick={() => handleImportDemo(repo.id)}
+        <form
+          className="flex max-w-2xl flex-col gap-3 rounded-lg border bg-card p-4 shadow-sm"
+          onSubmit={handlePublicRepoSubmit}
+        >
+          <label htmlFor="public-github-repo-url" className="text-sm font-medium">
+            Public GitHub repository URL
+          </label>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative flex-1">
+              <Link
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                id="public-github-repo-url"
+                className="pl-9"
+                value={repoUrl}
+                onChange={(event) => setRepoUrl(event.target.value)}
+                placeholder="https://github.com/owner/repo"
                 disabled={status !== 'connected' || isScanning}
+              />
+            </div>
+            <Button
+              type="submit"
+              className="gap-2"
+              disabled={status !== 'connected' || isScanning || repoUrl.trim().length === 0}
+            >
+              <Play className="h-4 w-4" aria-hidden="true" />
+              {isScanning ? 'Scanning...' : 'Scan GitHub Repo'}
+            </Button>
+          </div>
+          {lastProgress && (
+            <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+              {lastProgress.message}
+            </p>
+          )}
+        </form>
+
+        {demoRepositories.length === 0 ? (
+          <ErrorCard
+            message="No demo repositories configured"
+            suggestion="Set DECKGRAPH_DEMO_REPOS to at least one curated GitHub repository"
+          />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {demoRepositories.map((repo) => (
+              <article
+                key={repo.id}
+                className="flex min-h-44 flex-col justify-between rounded-lg border bg-card p-4 shadow-sm"
               >
-                <Play className="h-4 w-4" aria-hidden="true" />
-                {isScanning ? 'Importing...' : 'Import Demo'}
-              </Button>
-            </article>
-          ))}
-        </div>
+                <div className="space-y-2">
+                  <h3 className="text-base font-semibold">{repo.label}</h3>
+                  <p className="text-sm leading-6 text-muted-foreground">{repo.description}</p>
+                  <p className="truncate text-xs text-muted-foreground">{repo.url}</p>
+                </div>
+                <Button
+                  className="mt-4 self-start gap-2"
+                  onClick={() => handleImportDemo(repo.id)}
+                  disabled={status !== 'connected' || isScanning}
+                >
+                  <Play className="h-4 w-4" aria-hidden="true" />
+                  {isScanning ? 'Importing...' : 'Import Demo'}
+                </Button>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
     );
   }

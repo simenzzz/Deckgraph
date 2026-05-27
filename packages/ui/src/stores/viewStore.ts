@@ -13,6 +13,8 @@ export interface ViewState {
   readonly isLoading: boolean;
   readonly selectedModulePath: string | null;
   readonly currentView: CurrentView;
+  readonly analyzingModulePath: string | null;
+  readonly analysisRequestId: string | null;
 }
 
 export interface ViewActions {
@@ -20,6 +22,8 @@ export interface ViewActions {
   setLoading: (isLoading: boolean) => void;
   selectModule: (path: string | null) => void;
   setView: (view: CurrentView) => void;
+  startModuleAnalysis: (modulePath: string, requestId: string) => void;
+  completeModuleAnalysis: (requestId: string) => void;
   clear: () => void;
 }
 
@@ -30,6 +34,8 @@ export const useViewStore = create<ViewStore>((set) => ({
   isLoading: false,
   selectedModulePath: null,
   currentView: 'overview',
+  analyzingModulePath: null,
+  analysisRequestId: null,
 
   // M5: Reset selectedModulePath if the selected module is no longer in the result
   setResult: (result) =>
@@ -51,11 +57,22 @@ export const useViewStore = create<ViewStore>((set) => ({
   setView: (view) =>
     set((state) => ({ ...state, currentView: view })),
 
+  startModuleAnalysis: (modulePath, requestId) =>
+    set((state) => ({ ...state, analyzingModulePath: modulePath, analysisRequestId: requestId })),
+
+  completeModuleAnalysis: (requestId) =>
+    set((state) => {
+      if (state.analysisRequestId !== requestId) return state;
+      return { ...state, analyzingModulePath: null, analysisRequestId: null };
+    }),
+
   clear: () =>
     set(() => ({
       result: null,
       isLoading: false,
       selectedModulePath: null,
       currentView: 'overview',
+      analyzingModulePath: null,
+      analysisRequestId: null,
     })),
 }));

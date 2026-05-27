@@ -27,6 +27,7 @@ export interface ConnectionActions {
     demoMode: boolean,
     demoRepositories: readonly DemoRepository[],
   ) => void;
+  addDemoRepository: (repository: DemoRepository) => void;
 }
 
 export type ConnectionStore = ConnectionState & ConnectionActions;
@@ -51,4 +52,13 @@ export const useConnectionStore = create<ConnectionStore>((set) => ({
 
   setReady: (configPresent, hasScannedData, demoMode, demoRepositories) =>
     set((state) => ({ ...state, configPresent, hasScannedData, demoMode, demoRepositories })),
+
+  addDemoRepository: (repository) =>
+    set((state) => ({
+      ...state,
+      demoRepositories: [
+        ...state.demoRepositories.filter((existing) => existing.id !== repository.id),
+        repository,
+      ],
+    })),
 }));

@@ -166,6 +166,7 @@ export function createServer(options: ServerOptions): DeckgraphServer {
       scanResult: null,
       projectRoot: null,
       demoImportRequestId: null,
+      customDemoRepositories: [],
     };
 
     clients.add(connection);
@@ -187,7 +188,7 @@ export function createServer(options: ServerOptions): DeckgraphServer {
           configPresent,
           hasScannedData: demoMode ? connection.scanResult !== null : state.scanResult !== null,
           demoMode,
-          demoRepositories: state.demoRepositories,
+          demoRepositories: [...state.demoRepositories, ...connection.customDemoRepositories],
         };
         if (ws.readyState === ws.OPEN) {
           ws.send(JSON.stringify(ready));

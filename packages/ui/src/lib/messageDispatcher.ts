@@ -21,6 +21,11 @@ export function dispatchServerMessage(message: ServerMessage): void {
       useProjectStore.getState().setProject(message.data);
       break;
 
+    case 'demo_repository_imported':
+      useConnectionStore.getState().addDemoRepository(message.repository);
+      useProjectStore.getState().setProject(message.data);
+      break;
+
     case 'workspace_overview': {
       useWorkspaceStore.getState().setWorkspace(message.data);
       break;
@@ -38,6 +43,11 @@ export function dispatchServerMessage(message: ServerMessage): void {
       useConnectionStore.getState().setError(message.message, message.suggestion);
       // H4: Clear loading state so UI doesn't show infinite spinner
       useViewStore.getState().setLoading(false);
+      if (useProjectStore.getState().lastProgress?.requestId === message.requestId) {
+        useProjectStore.getState().clearScanProgress();
+      }
+      useDetailStore.getState().completeEnriching(message.requestId);
+      useViewStore.getState().completeModuleAnalysis(message.requestId);
       break;
 
     case 'ready':
@@ -54,11 +64,12 @@ export function dispatchServerMessage(message: ServerMessage): void {
 
     case 'module_updated':
       useProjectStore.getState().updateModule(message.module);
+      useViewStore.getState().completeModuleAnalysis(message.requestId);
       break;
 
     case 'dependency_enriched':
       useProjectStore.getState().updateDependency(message.dependency);
-      useDetailStore.getState().setEnriching(false);
+      useDetailStore.getState().completeEnriching(message.requestId);
       break;
 
     case 'file_change_detected':

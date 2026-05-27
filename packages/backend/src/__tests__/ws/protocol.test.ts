@@ -25,18 +25,20 @@ vi.mock('../../analysis/importResolver.js', () => ({
 
 vi.mock('../../ws/demoRepository.js', () => ({
   importDemoRepository: vi.fn(),
+  importPublicGithubRepository: vi.fn(),
 }));
 
 import { scanProject } from '../../scanner/scanner.js';
 import { executeQuery } from '../../graph/queryEngine.js';
 import { resolveImports } from '../../analysis/importResolver.js';
-import { importDemoRepository } from '../../ws/demoRepository.js';
+import { importDemoRepository, importPublicGithubRepository } from '../../ws/demoRepository.js';
 import { handleMessage } from '../../ws/protocol.js';
 
 const mockScanProject = vi.mocked(scanProject);
 const mockExecuteQuery = vi.mocked(executeQuery);
 const mockResolveImports = vi.mocked(resolveImports);
 const mockImportDemoRepository = vi.mocked(importDemoRepository);
+const mockImportPublicGithubRepository = vi.mocked(importPublicGithubRepository);
 
 function createMockConnection(): ClientConnection {
   return {
@@ -45,6 +47,7 @@ function createMockConnection(): ClientConnection {
     scanResult: null,
     projectRoot: null,
     demoImportRequestId: null,
+    customDemoRepositories: [],
   };
 }
 
@@ -294,6 +297,92 @@ describe('handleMessage', () => {
       expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/deckgraph-fixture');
       expect(connection.demoImportRequestId).toBeNull();
       expect(state.scanResult).toBeNull();
+    });
+
+    it('imports and immediately scans a custom public GitHub repository', async () => {
+      const scanResult = createMockScanResult('/tmp/deckgraph-demo-cache/custom-example-demo-repo');
+      const customRepository = {
+        id: 'custom-example-demo-repo',
+        label: 'example/demo-repo',
+        url: 'https://github.com/example/demo-repo.git',
+        description: 'README snippet for the public repository.',
+      };
+      const state = createMockState({
+        demoMode: true,
+        demoRepositories: [{
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'Fixture repo',
+        }],
+      });
+
+      mockImportPublicGithubRepository.mockResolvedValue({
+        repository: customRepository,
+        path: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+      });
+      mockScanProject.mockResolvedValue(scanResult);
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_public_github_repo',
+          requestId: 'custom-1',
+          url: 'https://github.com/example/demo-repo',
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('demo_repository_imported');
+      expect(mockImportPublicGithubRepository).toHaveBeenCalledWith({
+        url: 'https://github.com/example/demo-repo',
+        cacheDir: '/tmp/deckgraph-demo-cache',
+        existingRepositories: state.demoRepositories,
+      });
+      if (result.type === 'demo_repository_imported') {
+        expect(result.repository).toEqual(customRepository);
+        expect(result.data).toBe(scanResult.project);
+      }
+      expect(connection.customDemoRepositories).toEqual([customRepository]);
+      expect(connection.scanResult).toBe(scanResult);
+      expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/custom-example-demo-repo');
+    });
+
+    it('imports a previously added custom repository by repoId', async () => {
+      const customRepository = {
+        id: 'custom-example-demo-repo',
+        label: 'example/demo-repo',
+        url: 'https://github.com/example/demo-repo.git',
+        description: 'README snippet for the public repository.',
+      };
+      connection.customDemoRepositories = [customRepository];
+      const state = createMockState({ demoMode: true, demoRepositories: [] });
+      const scanResult = createMockScanResult('/tmp/deckgraph-demo-cache/custom-example-demo-repo');
+
+      mockImportDemoRepository.mockResolvedValue({
+        repository: customRepository,
+        path: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+      });
+      mockScanProject.mockResolvedValue(scanResult);
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_demo_repo',
+          requestId: 'custom-reimport',
+          repoId: 'custom-example-demo-repo',
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('project_overview');
+      expect(mockImportDemoRepository).toHaveBeenCalledWith({
+        repoId: 'custom-example-demo-repo',
+        repositories: [customRepository],
+        cacheDir: '/tmp/deckgraph-demo-cache',
+      });
     });
 
     it('preserves previous demo state and sanitizes errors when scan fails', async () => {

@@ -9,19 +9,36 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { EcosystemBadge } from './EcosystemBadge';
 import { VirtualizedModuleList } from './VirtualizedModuleList';
 import { cn } from '@/lib/utils';
+import type { WsClient } from '@/lib/wsClient';
+import { createRequestId } from '@/lib/wsClient';
 
 type SortField = 'name' | 'ecosystem' | 'deps';
 type SortDir = 'asc' | 'desc';
 
-export function ModuleList() {
+interface ModuleListProps {
+  readonly wsClient: WsClient | null;
+}
+
+export function ModuleList({ wsClient }: ModuleListProps) {
   const result = useViewStore((s) => s.result);
   const selectedModulePath = useViewStore((s) => s.selectedModulePath);
   const selectModule = useViewStore((s) => s.selectModule);
+  const analyzingModulePath = useViewStore((s) => s.analyzingModulePath);
+  const startModuleAnalysis = useViewStore((s) => s.startModuleAnalysis);
 
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const modules = result?.modules ?? [];
+
+  const handleAnalyze = (modulePath: string) => {
+    if (!wsClient || analyzingModulePath) return;
+    const requestId = createRequestId();
+    const sent = wsClient.send({ type: 'analyze_imports', requestId, modulePath });
+    if (sent) {
+      startModuleAnalysis(modulePath, requestId);
+    }
+  };
 
   const sorted = useMemo(() => {
     const items = [...modules];
@@ -68,7 +85,9 @@ export function ModuleList() {
         <VirtualizedModuleList
           modules={sorted}
           selectedModulePath={selectedModulePath}
+          analyzingModulePath={analyzingModulePath}
           onSelectModule={selectModule}
+          onAnalyzeModule={handleAnalyze}
         />
       </div>
     );
@@ -95,7 +114,9 @@ export function ModuleList() {
             key={mod.path}
             module={mod}
             isSelected={selectedModulePath === mod.path}
+            isAnalyzing={analyzingModulePath === mod.path}
             onSelect={() => selectModule(mod.path)}
+            onAnalyze={() => handleAnalyze(mod.path)}
           />
         ))}
       </ScrollArea>
@@ -106,17 +127,31 @@ export function ModuleList() {
 function ModuleRow({
   module: mod,
   isSelected,
+  isAnalyzing,
   onSelect,
+  onAnalyze,
 }: {
   readonly module: ModuleView;
   readonly isSelected: boolean;
+  readonly isAnalyzing: boolean;
   readonly onSelect: () => void;
+  readonly onAnalyze: () => void;
 }) {
+  const canAnalyze = mod.analysisState === 'manifest-only';
+
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
-        'flex w-full items-center px-3 py-2 text-sm transition-colors hover:bg-muted/50',
+        'flex w-full cursor-pointer items-center px-3 py-2 text-sm transition-colors hover:bg-muted/50',
         isSelected && 'bg-accent',
       )}
       data-testid={`module-${mod.path}`}
@@ -125,6 +160,30 @@ function ModuleRow({
         <span className="font-medium">{mod.name}</span>
         <span className="text-xs text-muted-foreground">{mod.path}</span>
       </div>
+      {canAnalyze && (
+        <button
+          type="button"
+          className={cn(
+            'mr-3 rounded border px-2 py-1 text-xs text-muted-foreground hover:bg-muted',
+            isAnalyzing && 'opacity-60',
+          )}
+          disabled={isAnalyzing}
+          onClick={(event) => {
+            event.stopPropagation();
+            onAnalyze();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              event.stopPropagation();
+              onAnalyze();
+            }
+          }}
+          data-testid={`analyze-module-${mod.path}`}
+        >
+          {isAnalyzing ? 'Analyzing...' : 'Analyze imports'}
+        </button>
+      )}
       <div className="w-20">
         <EcosystemBadge ecosystem={mod.ecosystem} />
       </div>
@@ -132,7 +191,7 @@ function ModuleRow({
         <span className="font-medium">{mod.dependencies.length}</span>
         <span className="text-muted-foreground">/{mod.totalDependencyCount}</span>
       </div>
-    </button>
+    </div>
   );
 }
 

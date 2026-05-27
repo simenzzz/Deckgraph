@@ -51,13 +51,16 @@ export function useDependencyDetail(wsClient: WsClient | null): DependencyDetail
 
   const requestEnrichment = useCallback(() => {
     if (!selectedDep || !wsClient) return;
-    useDetailStore.getState().setEnriching(true);
-    wsClient.send({
+    const requestId = createRequestId();
+    const sent = wsClient.send({
       type: 'enrich_dependency',
-      requestId: createRequestId(),
+      requestId,
       ecosystem: selectedDep.ecosystem,
       packageName: selectedDep.name,
     });
+    if (sent) {
+      useDetailStore.getState().startEnriching(requestId);
+    }
   }, [selectedDep, wsClient]);
 
   // Auto-trigger enrichment when a dep is selected and has no registry data.

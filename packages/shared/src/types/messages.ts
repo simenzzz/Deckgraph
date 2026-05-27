@@ -19,6 +19,7 @@ import type { ViewQuery, ViewResult } from './views.js';
 export type ClientMessage =
   | ScanProjectMessage
   | ImportDemoRepoMessage
+  | ImportPublicGithubRepoMessage
   | ScanWorkspaceMessage
   | ViewQueryMessage
   | AnalyzeImportsMessage
@@ -44,6 +45,15 @@ export interface ImportDemoRepoMessage {
   readonly type: 'import_demo_repo';
   readonly requestId: string;
   readonly repoId: string;
+}
+
+/**
+ * Import and scan a public GitHub repository in hosted demo mode.
+ */
+export interface ImportPublicGithubRepoMessage {
+  readonly type: 'import_public_github_repo';
+  readonly requestId: string;
+  readonly url: string;
 }
 
 /**
@@ -145,6 +155,7 @@ export interface PackageBatchMessage {
  */
 export type ServerMessage =
   | ProjectOverviewMessage
+  | DemoRepositoryImportedMessage
   | WorkspaceOverviewMessage
   | ViewResultMessage
   | ModuleUpdatedMessage
@@ -163,6 +174,16 @@ export type ServerMessage =
 export interface ProjectOverviewMessage {
   readonly type: 'project_overview';
   readonly requestId: string;
+  readonly data: Project;
+}
+
+/**
+ * Public demo repository imported and scanned for this browser session.
+ */
+export interface DemoRepositoryImportedMessage {
+  readonly type: 'demo_repository_imported';
+  readonly requestId: string;
+  readonly repository: DemoRepository;
   readonly data: Project;
 }
 

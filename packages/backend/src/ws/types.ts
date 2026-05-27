@@ -62,6 +62,8 @@ export interface ClientConnection {
   projectRoot: string | null;
   /** Request currently importing/scanning a demo repository for this connection */
   demoImportRequestId: string | null;
+  /** Public GitHub repositories added only for this browser connection */
+  customDemoRepositories: DemoRepository[];
 }
 
 /**

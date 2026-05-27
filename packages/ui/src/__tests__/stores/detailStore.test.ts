@@ -6,6 +6,7 @@ describe('detailStore', () => {
     useDetailStore.setState({
       selectedDep: null,
       isEnriching: false,
+      enrichmentRequestId: null,
     });
   });
 
@@ -13,6 +14,7 @@ describe('detailStore', () => {
     const state = useDetailStore.getState();
     expect(state.selectedDep).toBeNull();
     expect(state.isEnriching).toBe(false);
+    expect(state.enrichmentRequestId).toBeNull();
   });
 
   it('selectDep sets selected dep and resets enriching', () => {
@@ -22,6 +24,7 @@ describe('detailStore', () => {
     const state = useDetailStore.getState();
     expect(state.selectedDep).toEqual({ name: 'react', ecosystem: 'npm' });
     expect(state.isEnriching).toBe(false);
+    expect(state.enrichmentRequestId).toBeNull();
   });
 
   it('closeDep clears selection and enriching', () => {
@@ -32,6 +35,7 @@ describe('detailStore', () => {
     const state = useDetailStore.getState();
     expect(state.selectedDep).toBeNull();
     expect(state.isEnriching).toBe(false);
+    expect(state.enrichmentRequestId).toBeNull();
   });
 
   it('setEnriching updates enriching state', () => {
@@ -40,5 +44,16 @@ describe('detailStore', () => {
 
     useDetailStore.getState().setEnriching(false);
     expect(useDetailStore.getState().isEnriching).toBe(false);
+    expect(useDetailStore.getState().enrichmentRequestId).toBeNull();
+  });
+
+  it('completes only the matching enrichment request', () => {
+    useDetailStore.getState().startEnriching('req-1');
+    useDetailStore.getState().completeEnriching('req-2');
+    expect(useDetailStore.getState().isEnriching).toBe(true);
+
+    useDetailStore.getState().completeEnriching('req-1');
+    expect(useDetailStore.getState().isEnriching).toBe(false);
+    expect(useDetailStore.getState().enrichmentRequestId).toBeNull();
   });
 });

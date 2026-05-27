@@ -6,6 +6,7 @@ import { describe, it, expect } from 'vitest';
 import {
   scanProjectMessageSchema,
   importDemoRepoMessageSchema,
+  importPublicGithubRepoMessageSchema,
   viewQueryMessageSchema,
   analyzeImportsMessageSchema,
   enrichDependencyMessageSchema,
@@ -44,6 +45,27 @@ describe('client message schemas', () => {
         repoId: 'deckgraph-fixture',
       };
       expect(importDemoRepoMessageSchema.parse(message)).toEqual(message);
+    });
+  });
+
+  describe('importPublicGithubRepoMessageSchema', () => {
+    it('accepts valid public GitHub import messages', () => {
+      const message = {
+        ...baseMessage,
+        type: 'import_public_github_repo' as const,
+        url: 'https://github.com/example/project.git',
+      };
+      expect(importPublicGithubRepoMessageSchema.parse(message)).toEqual(message);
+    });
+
+    it('rejects oversized public GitHub URLs', () => {
+      expect(() =>
+        importPublicGithubRepoMessageSchema.parse({
+          ...baseMessage,
+          type: 'import_public_github_repo',
+          url: `https://github.com/example/${'a'.repeat(2050)}`,
+        }),
+      ).toThrow();
     });
   });
 
@@ -101,6 +123,13 @@ describe('client message schemas', () => {
           ...baseMessage,
           type: 'import_demo_repo' as const,
           repoId: 'deckgraph-fixture',
+        }),
+      ).toBeTruthy();
+      expect(
+        clientMessageSchema.parse({
+          ...baseMessage,
+          type: 'import_public_github_repo' as const,
+          url: 'https://github.com/example/project',
         }),
       ).toBeTruthy();
       expect(
@@ -299,6 +328,19 @@ describe('server message schemas', () => {
         serverMessageSchema.parse({
           ...baseMessage,
           type: 'project_overview' as const,
+          data: validProject,
+        }),
+      ).toBeTruthy();
+      expect(
+        serverMessageSchema.parse({
+          ...baseMessage,
+          type: 'demo_repository_imported' as const,
+          repository: {
+            id: 'custom-example-project-ab12cd34',
+            label: 'example/project',
+            url: 'https://github.com/example/project.git',
+            description: 'README snippet for the imported repository.',
+          },
           data: validProject,
         }),
       ).toBeTruthy();

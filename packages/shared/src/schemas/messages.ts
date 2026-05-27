@@ -15,6 +15,7 @@ import { viewQuerySchema, viewResultSchema } from './views.js';
 import type {
   ScanProjectMessage,
   ImportDemoRepoMessage,
+  ImportPublicGithubRepoMessage,
   ScanWorkspaceMessage,
   ViewQueryMessage,
   AnalyzeImportsMessage,
@@ -26,6 +27,7 @@ import type {
   PackageBatchMessage,
   ClientMessage,
   ProjectOverviewMessage,
+  DemoRepositoryImportedMessage,
   WorkspaceOverviewMessage,
   ViewResultMessage,
   ModuleUpdatedMessage,
@@ -54,6 +56,12 @@ export const importDemoRepoMessageSchema = z.object({
   type: z.literal('import_demo_repo'),
   requestId: z.string().min(1).max(128),
   repoId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+});
+
+export const importPublicGithubRepoMessageSchema = z.object({
+  type: z.literal('import_public_github_repo'),
+  requestId: z.string().min(1).max(128),
+  url: z.string().min(1).max(2048),
 });
 
 export const scanWorkspaceMessageSchema = z.object({
@@ -121,6 +129,7 @@ export const packageBatchMessageSchema = z.object({
 export const clientMessageSchema = z.discriminatedUnion('type', [
   scanProjectMessageSchema,
   importDemoRepoMessageSchema,
+  importPublicGithubRepoMessageSchema,
   scanWorkspaceMessageSchema,
   viewQueryMessageSchema,
   analyzeImportsMessageSchema,
@@ -139,6 +148,13 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
 export const projectOverviewMessageSchema = z.object({
   type: z.literal('project_overview'),
   requestId: z.string().min(1).max(128),
+  data: projectSchema,
+});
+
+export const demoRepositoryImportedMessageSchema = z.object({
+  type: z.literal('demo_repository_imported'),
+  requestId: z.string().min(1).max(128),
+  repository: demoRepositorySchema,
   data: projectSchema,
 });
 
@@ -222,6 +238,7 @@ export const readyMessageSchema = z.object({
 
 export const serverMessageSchema = z.discriminatedUnion('type', [
   projectOverviewMessageSchema,
+  demoRepositoryImportedMessageSchema,
   workspaceOverviewMessageSchema,
   viewResultMessageSchema,
   moduleUpdatedMessageSchema,
@@ -242,6 +259,8 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
 export const parseClientMessage = (value: unknown) => clientMessageSchema.parse(value);
 export const parseScanProjectMessage = (value: unknown) => scanProjectMessageSchema.parse(value);
 export const parseImportDemoRepoMessage = (value: unknown) => importDemoRepoMessageSchema.parse(value);
+export const parseImportPublicGithubRepoMessage = (value: unknown) =>
+  importPublicGithubRepoMessageSchema.parse(value);
 export const parseScanWorkspaceMessage = (value: unknown) => scanWorkspaceMessageSchema.parse(value);
 export const parseViewQueryMessage = (value: unknown) => viewQueryMessageSchema.parse(value);
 export const parseAnalyzeImportsMessage = (value: unknown) =>
@@ -253,6 +272,8 @@ export const parseSyncMessage = (value: unknown) => syncMessageSchema.parse(valu
 export const parseServerMessage = (value: unknown) => serverMessageSchema.parse(value);
 export const parseProjectOverviewMessage = (value: unknown) =>
   projectOverviewMessageSchema.parse(value);
+export const parseDemoRepositoryImportedMessage = (value: unknown) =>
+  demoRepositoryImportedMessageSchema.parse(value);
 export const parseWorkspaceOverviewMessage = (value: unknown) =>
   workspaceOverviewMessageSchema.parse(value);
 export const parseViewResultMessage = (value: unknown) => viewResultMessageSchema.parse(value);
@@ -290,6 +311,11 @@ export type _MessageSchemaAssertions = [
   // Forward direction: ZodOutput ⊆ Interface
   Expect<z.infer<typeof scanProjectMessageSchema> extends ScanProjectMessage ? true : false>,
   Expect<z.infer<typeof importDemoRepoMessageSchema> extends ImportDemoRepoMessage ? true : false>,
+  Expect<
+    z.infer<typeof importPublicGithubRepoMessageSchema> extends ImportPublicGithubRepoMessage
+      ? true
+      : false
+  >,
   Expect<z.infer<typeof scanWorkspaceMessageSchema> extends ScanWorkspaceMessage ? true : false>,
   Expect<z.infer<typeof viewQueryMessageSchema> extends ViewQueryMessage ? true : false>,
   Expect<z.infer<typeof analyzeImportsMessageSchema> extends AnalyzeImportsMessage ? true : false>,
@@ -300,6 +326,11 @@ export type _MessageSchemaAssertions = [
   Expect<z.infer<typeof clientMessageSchema> extends ClientMessage ? true : false>,
   Expect<
     z.infer<typeof projectOverviewMessageSchema> extends ProjectOverviewMessage ? true : false
+  >,
+  Expect<
+    z.infer<typeof demoRepositoryImportedMessageSchema> extends DemoRepositoryImportedMessage
+      ? true
+      : false
   >,
   Expect<
     z.infer<typeof workspaceOverviewMessageSchema> extends WorkspaceOverviewMessage ? true : false
@@ -336,6 +367,13 @@ export type _MessageSchemaAssertions = [
   // Reverse direction: Interface ⊆ ZodOutput
   Expect<Mutable<ScanProjectMessage> extends z.infer<typeof scanProjectMessageSchema> ? true : false>,
   Expect<Mutable<ImportDemoRepoMessage> extends z.infer<typeof importDemoRepoMessageSchema> ? true : false>,
+  Expect<
+    Mutable<ImportPublicGithubRepoMessage> extends z.infer<
+      typeof importPublicGithubRepoMessageSchema
+    >
+      ? true
+      : false
+  >,
   Expect<Mutable<ScanWorkspaceMessage> extends z.infer<typeof scanWorkspaceMessageSchema> ? true : false>,
   Expect<Mutable<ViewQueryMessage> extends z.infer<typeof viewQueryMessageSchema> ? true : false>,
   Expect<Mutable<AnalyzeImportsMessage> extends z.infer<typeof analyzeImportsMessageSchema> ? true : false>,
@@ -348,6 +386,13 @@ export type _MessageSchemaAssertions = [
   Expect<Mutable<ClientMessage> extends z.infer<typeof clientMessageSchema> ? true : false>,
   Expect<
     Mutable<ProjectOverviewMessage> extends z.infer<typeof projectOverviewMessageSchema>
+      ? true
+      : false
+  >,
+  Expect<
+    Mutable<DemoRepositoryImportedMessage> extends z.infer<
+      typeof demoRepositoryImportedMessageSchema
+    >
       ? true
       : false
   >,
