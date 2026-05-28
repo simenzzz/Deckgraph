@@ -104,6 +104,64 @@ describe('ProjectOverview', () => {
     }));
   });
 
+  it('sends scan scope with demo repository imports', () => {
+    const client = createMockWsClient();
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [{
+        id: 'deckgraph-fixture',
+        label: 'Deckgraph Fixture',
+        url: 'https://github.com/simenzzz/Deckgraph.git',
+        description: 'A public demo repository.',
+      }],
+    });
+
+    render(<ProjectOverview wsClient={client} />);
+    fireEvent.change(screen.getByLabelText(/deckgraph fixture scan root path/i), {
+      target: { value: 'packages' },
+    });
+    fireEvent.change(screen.getByLabelText(/deckgraph fixture exclude directories/i), {
+      target: { value: 'fixtures, docs/archive' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /import demo/i }));
+
+    expect(client.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'import_demo_repo',
+      repoId: 'deckgraph-fixture',
+      scanRoot: 'packages',
+      excludePaths: ['fixtures', 'docs/archive'],
+    }));
+  });
+
+  it('only shows importing state on the selected demo repository', () => {
+    const client = createMockWsClient();
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [
+        {
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'A public demo repository.',
+        },
+        {
+          id: 'lucubrum',
+          label: 'simenzzz/lucubrum',
+          url: 'https://github.com/simenzzz/lucubrum.git',
+          description: 'Another public demo repository.',
+        },
+      ],
+    });
+
+    render(<ProjectOverview wsClient={client} />);
+    const importButtons = screen.getAllByRole('button', { name: /import demo/i });
+
+    fireEvent.click(importButtons[0]!);
+
+    expect(screen.getByRole('button', { name: /importing/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /import demo/i })).toBeDisabled();
+  });
+
   it('sends import_public_github_repo when a public GitHub URL is submitted', () => {
     const client = createMockWsClient();
     useConnectionStore.setState({
@@ -126,6 +184,71 @@ describe('ProjectOverview', () => {
       type: 'import_public_github_repo',
       url: 'https://github.com/example/demo-repo',
     }));
+  });
+
+  it('sends scan scope with public GitHub imports', () => {
+    const client = createMockWsClient();
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [{
+        id: 'deckgraph-fixture',
+        label: 'Deckgraph Fixture',
+        url: 'https://github.com/simenzzz/Deckgraph.git',
+        description: 'A public demo repository.',
+      }],
+    });
+
+    render(<ProjectOverview wsClient={client} />);
+    fireEvent.change(screen.getByLabelText(/public github repository url/i), {
+      target: { value: 'https://github.com/example/demo-repo' },
+    });
+    fireEvent.change(screen.getByLabelText(/^scan root path$/i), {
+      target: { value: 'apps/web' },
+    });
+    fireEvent.change(screen.getByLabelText(/^exclude directories$/i), {
+      target: { value: 'fixtures, dist' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /scan github repo/i }));
+
+    expect(client.send).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'import_public_github_repo',
+      url: 'https://github.com/example/demo-repo',
+      scanRoot: 'apps/web',
+      excludePaths: ['fixtures', 'dist'],
+    }));
+  });
+
+  it('only shows scanning state on the public GitHub repository submit button', () => {
+    const client = createMockWsClient();
+    useConnectionStore.setState({
+      demoMode: true,
+      demoRepositories: [
+        {
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'A public demo repository.',
+        },
+        {
+          id: 'lucubrum',
+          label: 'simenzzz/lucubrum',
+          url: 'https://github.com/simenzzz/lucubrum.git',
+          description: 'Another public demo repository.',
+        },
+      ],
+    });
+
+    render(<ProjectOverview wsClient={client} />);
+    fireEvent.change(screen.getByLabelText(/public github repository url/i), {
+      target: { value: 'https://github.com/example/demo-repo' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /scan github repo/i }));
+
+    expect(screen.getByRole('button', { name: /scanning/i })).toBeDisabled();
+    expect(screen.getAllByRole('button', { name: /import demo/i })).toHaveLength(2);
+    for (const button of screen.getAllByRole('button', { name: /import demo/i })) {
+      expect(button).toBeDisabled();
+    }
   });
 
   it('renders session custom repositories next to curated demo repositories', () => {

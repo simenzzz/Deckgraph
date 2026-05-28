@@ -45,6 +45,10 @@ export interface ImportDemoRepoMessage {
   readonly type: 'import_demo_repo';
   readonly requestId: string;
   readonly repoId: string;
+  /** Repository-relative directory to scan. Defaults to repository root. */
+  readonly scanRoot?: string;
+  /** Repository-relative directories/globs to exclude from scan discovery. */
+  readonly excludePaths?: readonly string[];
 }
 
 /**
@@ -54,6 +58,10 @@ export interface ImportPublicGithubRepoMessage {
   readonly type: 'import_public_github_repo';
   readonly requestId: string;
   readonly url: string;
+  /** Repository-relative directory to scan. Defaults to repository root. */
+  readonly scanRoot?: string;
+  /** Repository-relative directories/globs to exclude from scan discovery. */
+  readonly excludePaths?: readonly string[];
 }
 
 /**

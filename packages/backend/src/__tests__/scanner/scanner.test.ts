@@ -359,6 +359,32 @@ describe('scanProject', () => {
     expect(project.config).toEqual(config);
   });
 
+  it('loads config from configRoot and discovers modules under scanRoot', async () => {
+    mockLoadConfig.mockResolvedValue({
+      ignorePaths: ['fixtures'],
+      concernOverrides: {},
+    });
+    mockDiscoverModules.mockResolvedValue([]);
+
+    await scanProject({
+      projectRoot: '/test/repo',
+      configRoot: '/test/repo',
+      scanRoot: 'packages',
+      additionalIgnorePaths: ['docs/archive'],
+      registry: createMockRegistry(),
+    });
+
+    expect(mockLoadConfig).toHaveBeenCalledWith('/test/repo');
+    expect(mockDiscoverModules).toHaveBeenCalledWith(
+      '/test/repo',
+      {
+        ignorePaths: ['fixtures', 'docs/archive'],
+        concernOverrides: {},
+      },
+      { scanRoot: 'packages' },
+    );
+  });
+
   it('uses custom registry when provided', async () => {
     mockLoadConfig.mockResolvedValue(null);
     const discovered: DiscoveredModule[] = [

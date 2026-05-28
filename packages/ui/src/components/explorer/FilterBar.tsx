@@ -3,18 +3,20 @@
  * cross-edge toggle, and search input.
  */
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { DependencyScope } from '@deckgraph/shared';
 import { useFilterStore, useViewStore } from '@/stores';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { X, Link2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Link2 } from 'lucide-react';
 import { ALL_ECOSYSTEMS, ECOSYSTEM_CONFIG } from '@/lib/ecosystemConfig';
 
 const SCOPES: readonly DependencyScope[] = ['runtime', 'dev', 'build', 'optional', 'peer'];
+const CONCERN_TAGS_PER_PAGE = 8;
 
 export function FilterBar() {
+  const [concernPage, setConcernPage] = useState(0);
   const ecosystems = useFilterStore((s) => s.ecosystems);
   const scopes = useFilterStore((s) => s.scopes);
   const search = useFilterStore((s) => s.search);
@@ -42,6 +44,17 @@ export function FilterBar() {
     }
     return [...tags].sort();
   }, [result]);
+
+  const concernPageCount = Math.max(1, Math.ceil(availableConcerns.length / CONCERN_TAGS_PER_PAGE));
+  const visibleConcerns = availableConcerns.slice(
+    concernPage * CONCERN_TAGS_PER_PAGE,
+    (concernPage + 1) * CONCERN_TAGS_PER_PAGE,
+  );
+  const showConcernPagination = availableConcerns.length > CONCERN_TAGS_PER_PAGE;
+
+  useEffect(() => {
+    setConcernPage((page) => Math.min(page, concernPageCount - 1));
+  }, [concernPageCount]);
 
   const hasActiveFilters =
     ecosystems.length > 0 ||
@@ -86,9 +99,9 @@ export function FilterBar() {
 
       {/* Concern tag chips */}
       {availableConcerns.length > 0 && (
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 basis-full flex-wrap items-center gap-1">
           <span className="text-xs font-medium text-muted-foreground mr-1">Concern:</span>
-          {availableConcerns.map((tag) => (
+          {visibleConcerns.map((tag) => (
             <Button
               key={tag}
               variant={concern === tag ? 'default' : 'outline'}
@@ -99,6 +112,33 @@ export function FilterBar() {
               {tag}
             </Button>
           ))}
+          {showConcernPagination && (
+            <div className="ml-auto flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConcernPage((page) => Math.max(0, page - 1))}
+                disabled={concernPage === 0}
+                className="h-7 px-2"
+                aria-label="Previous concern tags"
+              >
+                <ChevronLeft className="h-3 w-3" aria-hidden="true" />
+              </Button>
+              <span className="min-w-10 text-center text-xs text-muted-foreground">
+                {concernPage + 1}/{concernPageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConcernPage((page) => Math.min(concernPageCount - 1, page + 1))}
+                disabled={concernPage >= concernPageCount - 1}
+                className="h-7 px-2"
+                aria-label="Next concern tags"
+              >
+                <ChevronRight className="h-3 w-3" aria-hidden="true" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

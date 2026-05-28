@@ -8,6 +8,7 @@
 import type {
   AdapterRegistry,
   Project,
+  ProjectConfig,
   UnifiedGraph,
 } from '@deckgraph/shared';
 import { loadConfig } from '../config/configLoader.js';
@@ -28,6 +29,12 @@ const logger = createLogger('scanner');
 export interface ScanOptions {
   /** Absolute path to the project root */
   readonly projectRoot: string;
+  /** Absolute path to load .deckgraph.yaml from. Defaults to projectRoot. */
+  readonly configRoot?: string;
+  /** Repository-relative subdirectory to discover modules from. Defaults to project root. */
+  readonly scanRoot?: string;
+  /** Additional ignore paths merged with .deckgraph.yaml ignore-paths for this scan. */
+  readonly additionalIgnorePaths?: readonly string[];
   /** Custom adapter registry (for testing) */
   readonly registry?: AdapterRegistry;
 }
@@ -57,13 +64,16 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const registry = options.registry ?? createDefaultRegistry();
   const profiler = createScanProfiler();
 
-  const config = await loadConfig(projectRoot);
+  const config = await loadConfig(options.configRoot ?? projectRoot);
+  const effectiveConfig = mergeScanConfig(config, options.additionalIgnorePaths ?? []);
   if (config) {
     logger.info('Config loaded from .deckgraph.yaml');
   }
 
   profiler.startPhase('discovery');
-  const discovered = await discoverModules(projectRoot, config);
+  const discovered = await discoverModules(projectRoot, effectiveConfig, {
+    scanRoot: options.scanRoot,
+  });
   profiler.endPhase('discovery');
   logger.info({ moduleCount: discovered.length }, 'Modules discovered');
 
@@ -71,7 +81,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   const rawModules = await buildModules(discovered, projectRoot, registry);
   profiler.endPhase('manifestParsing');
 
-  const taggedModules = tagDependencies(rawModules, config);
+  const taggedModules = tagDependencies(rawModules, effectiveConfig);
 
   profiler.startPhase('graphBuild');
   const graph = buildGraph(taggedModules);
@@ -83,7 +93,7 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
 
   const project: Project = {
     root: projectRoot,
-    config,
+    config: effectiveConfig,
     modules: taggedModules,
     crossEdges,
     lastScannedAt: new Date().toISOString(),
@@ -101,4 +111,16 @@ export async function scanProject(options: ScanOptions): Promise<ScanResult> {
   );
 
   return { project, graph: { ...graph, crossEdges } };
+}
+
+function mergeScanConfig(
+  config: ProjectConfig | null,
+  additionalIgnorePaths: readonly string[],
+): ProjectConfig | null {
+  if (additionalIgnorePaths.length === 0) return config;
+
+  return {
+    ignorePaths: [...(config?.ignorePaths ?? []), ...additionalIgnorePaths],
+    concernOverrides: config?.concernOverrides ?? {},
+  };
 }

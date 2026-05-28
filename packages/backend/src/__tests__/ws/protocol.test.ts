@@ -15,6 +15,10 @@ vi.mock('../../scanner/scanner.js', () => ({
   scanProject: vi.fn(),
 }));
 
+vi.mock('node:fs/promises', () => ({
+  stat: vi.fn().mockResolvedValue({ isDirectory: () => true }),
+}));
+
 vi.mock('../../graph/queryEngine.js', () => ({
   executeQuery: vi.fn(),
 }));
@@ -29,12 +33,14 @@ vi.mock('../../ws/demoRepository.js', () => ({
 }));
 
 import { scanProject } from '../../scanner/scanner.js';
+import { stat } from 'node:fs/promises';
 import { executeQuery } from '../../graph/queryEngine.js';
 import { resolveImports } from '../../analysis/importResolver.js';
 import { importDemoRepository, importPublicGithubRepository } from '../../ws/demoRepository.js';
 import { handleMessage } from '../../ws/protocol.js';
 
 const mockScanProject = vi.mocked(scanProject);
+const mockStat = vi.mocked(stat);
 const mockExecuteQuery = vi.mocked(executeQuery);
 const mockResolveImports = vi.mocked(resolveImports);
 const mockImportDemoRepository = vi.mocked(importDemoRepository);
@@ -292,6 +298,9 @@ describe('handleMessage', () => {
       });
       expect(mockScanProject).toHaveBeenCalledWith({
         projectRoot: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+        configRoot: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+        scanRoot: '.',
+        additionalIgnorePaths: [],
       });
       expect(connection.scanResult).toBe(scanResult);
       expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/deckgraph-fixture');
@@ -340,6 +349,12 @@ describe('handleMessage', () => {
         cacheDir: '/tmp/deckgraph-demo-cache',
         existingRepositories: state.demoRepositories,
       });
+      expect(mockScanProject).toHaveBeenCalledWith({
+        projectRoot: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+        configRoot: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+        scanRoot: '.',
+        additionalIgnorePaths: [],
+      });
       if (result.type === 'demo_repository_imported') {
         expect(result.repository).toEqual(customRepository);
         expect(result.data).toBe(scanResult.project);
@@ -347,6 +362,119 @@ describe('handleMessage', () => {
       expect(connection.customDemoRepositories).toEqual([customRepository]);
       expect(connection.scanResult).toBe(scanResult);
       expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/custom-example-demo-repo');
+    });
+
+    it('passes scan scope options for curated demo imports', async () => {
+      const scanResult = createMockScanResult('/tmp/deckgraph-demo-cache/deckgraph-fixture');
+      const state = createMockState({
+        demoMode: true,
+        demoRepositories: [{
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'Fixture repo',
+        }],
+      });
+
+      mockImportDemoRepository.mockResolvedValue({
+        repository: state.demoRepositories[0]!,
+        path: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+      });
+      mockScanProject.mockResolvedValue(scanResult);
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_demo_repo',
+          requestId: 'scoped-demo',
+          repoId: 'deckgraph-fixture',
+          scanRoot: 'packages',
+          excludePaths: ['fixtures', 'docs/archive'],
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('project_overview');
+      expect(mockStat).toHaveBeenCalledWith('/tmp/deckgraph-demo-cache/deckgraph-fixture/packages');
+      expect(mockScanProject).toHaveBeenCalledWith({
+        projectRoot: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+        configRoot: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+        scanRoot: 'packages',
+        additionalIgnorePaths: ['fixtures', 'docs/archive'],
+      });
+    });
+
+    it('passes scan scope options for public GitHub imports', async () => {
+      const scanResult = createMockScanResult('/tmp/deckgraph-demo-cache/custom-example-demo-repo');
+      const customRepository = {
+        id: 'custom-example-demo-repo',
+        label: 'example/demo-repo',
+        url: 'https://github.com/example/demo-repo.git',
+        description: 'README snippet for the public repository.',
+      };
+      const state = createMockState({ demoMode: true });
+
+      mockImportPublicGithubRepository.mockResolvedValue({
+        repository: customRepository,
+        path: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+      });
+      mockScanProject.mockResolvedValue(scanResult);
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_public_github_repo',
+          requestId: 'scoped-public',
+          url: 'https://github.com/example/demo-repo',
+          scanRoot: 'apps/web',
+          excludePaths: ['fixtures', 'dist'],
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('demo_repository_imported');
+      expect(mockStat).toHaveBeenCalledWith('/tmp/deckgraph-demo-cache/custom-example-demo-repo/apps/web');
+      expect(mockScanProject).toHaveBeenCalledWith({
+        projectRoot: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+        configRoot: '/tmp/deckgraph-demo-cache/custom-example-demo-repo',
+        scanRoot: 'apps/web',
+        additionalIgnorePaths: ['fixtures', 'dist'],
+      });
+    });
+
+    it('rejects unsafe scan scope paths', async () => {
+      const state = createMockState({
+        demoMode: true,
+        demoRepositories: [{
+          id: 'deckgraph-fixture',
+          label: 'Deckgraph Fixture',
+          url: 'https://github.com/simenzzz/Deckgraph.git',
+          description: 'Fixture repo',
+        }],
+      });
+
+      mockImportDemoRepository.mockResolvedValue({
+        repository: state.demoRepositories[0]!,
+        path: '/tmp/deckgraph-demo-cache/deckgraph-fixture',
+      });
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_demo_repo',
+          requestId: 'bad-scope',
+          repoId: 'deckgraph-fixture',
+          scanRoot: '../secrets',
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('error');
+      expect((result as ErrorMessage).message).toContain('scanRoot');
+      expect(mockScanProject).not.toHaveBeenCalled();
     });
 
     it('imports a previously added custom repository by repoId', async () => {

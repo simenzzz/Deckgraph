@@ -25,6 +25,11 @@ export interface DiscoveredModule {
   readonly ecosystem: Ecosystem;
 }
 
+export interface DiscoverModulesOptions {
+  /** Repository-relative subdirectory to search for modules. Defaults to the project root. */
+  readonly scanRoot?: string;
+}
+
 /**
  * Default directories to ignore during discovery.
  * These are common build output, dependency, and cache directories.
@@ -68,19 +73,22 @@ const ECOSYSTEM_PRIORITY: Readonly<Record<Ecosystem, number>> = {
 export async function discoverModules(
   projectRoot: string,
   config: ProjectConfig | null,
+  options: DiscoverModulesOptions = {},
 ): Promise<readonly DiscoveredModule[]> {
   const manifestFileNames = getAllManifestFileNames();
   const ignorePatterns = buildIgnorePatterns(config);
+  const scanRoot = options.scanRoot && options.scanRoot !== '.' ? options.scanRoot : null;
 
   logger.debug(
-    { projectRoot, manifestCount: manifestFileNames.length, ignoreCount: ignorePatterns.length },
+    { projectRoot, scanRoot, manifestCount: manifestFileNames.length, ignoreCount: ignorePatterns.length },
     'Starting module discovery',
   );
 
-  const globPattern =
+  const manifestPattern =
     manifestFileNames.length === 1
       ? `**/${manifestFileNames[0]}`
       : `**/{${manifestFileNames.join(',')}}`;
+  const globPattern = scanRoot ? `${scanRoot}/${manifestPattern}` : manifestPattern;
 
   const matches = await fg(globPattern, {
     cwd: projectRoot,

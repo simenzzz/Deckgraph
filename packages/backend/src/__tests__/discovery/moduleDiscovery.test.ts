@@ -181,6 +181,18 @@ describe('discoverModules', () => {
     );
   });
 
+  it('limits discovery to a repository-relative scan root', async () => {
+    mockFg.mockResolvedValue(['packages/app/package.json']);
+
+    const modules = await discoverModules('/project', null, { scanRoot: 'packages' });
+
+    expect(mockFg).toHaveBeenCalledWith(
+      expect.stringMatching(/^packages\/\*\*\//),
+      expect.any(Object),
+    );
+    expect(modules[0]?.path).toBe('packages/app');
+  });
+
   it('handles deeply nested modules', async () => {
     mockFg.mockResolvedValue([
       'a/b/c/d/package.json',

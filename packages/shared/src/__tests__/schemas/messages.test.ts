@@ -46,6 +46,17 @@ describe('client message schemas', () => {
       };
       expect(importDemoRepoMessageSchema.parse(message)).toEqual(message);
     });
+
+    it('accepts scoped demo import messages', () => {
+      const message = {
+        ...baseMessage,
+        type: 'import_demo_repo' as const,
+        repoId: 'deckgraph-fixture',
+        scanRoot: 'packages',
+        excludePaths: ['fixtures', 'docs/archive'],
+      };
+      expect(importDemoRepoMessageSchema.parse(message)).toEqual(message);
+    });
   });
 
   describe('importPublicGithubRepoMessageSchema', () => {
@@ -58,12 +69,34 @@ describe('client message schemas', () => {
       expect(importPublicGithubRepoMessageSchema.parse(message)).toEqual(message);
     });
 
+    it('accepts scoped public GitHub import messages', () => {
+      const message = {
+        ...baseMessage,
+        type: 'import_public_github_repo' as const,
+        url: 'https://github.com/example/project.git',
+        scanRoot: 'apps/web',
+        excludePaths: ['fixtures', 'vendor/**'],
+      };
+      expect(importPublicGithubRepoMessageSchema.parse(message)).toEqual(message);
+    });
+
     it('rejects oversized public GitHub URLs', () => {
       expect(() =>
         importPublicGithubRepoMessageSchema.parse({
           ...baseMessage,
           type: 'import_public_github_repo',
           url: `https://github.com/example/${'a'.repeat(2050)}`,
+        }),
+      ).toThrow();
+    });
+
+    it('rejects oversized exclude path lists', () => {
+      expect(() =>
+        importPublicGithubRepoMessageSchema.parse({
+          ...baseMessage,
+          type: 'import_public_github_repo',
+          url: 'https://github.com/example/project.git',
+          excludePaths: Array.from({ length: 257 }, (_, i) => `path-${i}`),
         }),
       ).toThrow();
     });

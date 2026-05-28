@@ -14,14 +14,28 @@ import { useProjectStore } from '@/stores/projectStore';
 import type { WsClient } from '@/lib/wsClient';
 import { createRequestId } from '@/lib/wsClient';
 import { Github, Link, Play } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 
 export interface ScanPromptProps {
   readonly wsClient: WsClient | null;
 }
 
+type PendingImportTarget =
+  | { readonly kind: 'public'; readonly requestId: string }
+  | { readonly kind: 'demo'; readonly requestId: string; readonly repoId: string };
+
+interface ScopeFormState {
+  readonly scanRoot: string;
+  readonly excludePaths: string;
+}
+
+const EMPTY_SCOPE: ScopeFormState = { scanRoot: '', excludePaths: '' };
+
 export function ScanPrompt({ wsClient }: ScanPromptProps) {
   const [repoUrl, setRepoUrl] = useState('');
+  const [publicScope, setPublicScope] = useState<ScopeFormState>(EMPTY_SCOPE);
+  const [repoScopes, setRepoScopes] = useState<Record<string, ScopeFormState>>({});
+  const [pendingImport, setPendingImport] = useState<PendingImportTarget | null>(null);
   const status = useConnectionStore((s) => s.status);
   const isScanning = useProjectStore((s) => s.isScanning);
   const lastProgress = useProjectStore((s) => s.lastProgress);
@@ -31,9 +45,16 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
   const demoMode = useConnectionStore((s) => s.demoMode);
   const demoRepositories = useConnectionStore((s) => s.demoRepositories);
   const clearError = useConnectionStore((s) => s.clearError);
+  const importInProgress = pendingImport !== null || isScanning;
+
+  useEffect(() => {
+    if (lastError || status !== 'connected') {
+      setPendingImport(null);
+    }
+  }, [lastError, status]);
 
   const handleScan = () => {
-    if (!wsClient || status !== 'connected' || isScanning) return;
+    if (!wsClient || status !== 'connected' || importInProgress) return;
 
     // Send scan_project through the normal flow.
     // The message dispatcher will route the response to the correct store.
@@ -41,22 +62,43 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
   };
 
   const handleImportDemo = (repoId: string) => {
-    if (!wsClient || status !== 'connected' || isScanning) return;
+    if (!wsClient || status !== 'connected' || importInProgress) return;
     clearError();
-    wsClient.send({ type: 'import_demo_repo', requestId: createRequestId(), repoId });
+    const requestId = createRequestId();
+    const sent = wsClient.send({
+      type: 'import_demo_repo',
+      requestId,
+      repoId,
+      ...toScopePayload(repoScopes[repoId] ?? EMPTY_SCOPE),
+    });
+    if (sent) {
+      setPendingImport({ kind: 'demo', requestId, repoId });
+    }
+  };
+
+  const updateRepoScope = (repoId: string, patch: Partial<ScopeFormState>) => {
+    setRepoScopes((current) => ({
+      ...current,
+      [repoId]: { ...(current[repoId] ?? EMPTY_SCOPE), ...patch },
+    }));
   };
 
   const handlePublicRepoSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const url = repoUrl.trim();
-    if (!url || !wsClient || status !== 'connected' || isScanning) return;
+    if (!url || !wsClient || status !== 'connected' || importInProgress) return;
 
     clearError();
-    wsClient.send({
+    const requestId = createRequestId();
+    const sent = wsClient.send({
       type: 'import_public_github_repo',
-      requestId: createRequestId(),
+      requestId,
       url,
+      ...toScopePayload(publicScope),
     });
+    if (sent) {
+      setPendingImport({ kind: 'public', requestId });
+    }
   };
 
   if (demoMode) {
@@ -101,18 +143,24 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
                 value={repoUrl}
                 onChange={(event) => setRepoUrl(event.target.value)}
                 placeholder="https://github.com/owner/repo"
-                disabled={status !== 'connected' || isScanning}
+                disabled={status !== 'connected' || importInProgress}
               />
             </div>
             <Button
               type="submit"
               className="gap-2"
-              disabled={status !== 'connected' || isScanning || repoUrl.trim().length === 0}
+              disabled={status !== 'connected' || importInProgress || repoUrl.trim().length === 0}
             >
               <Play className="h-4 w-4" aria-hidden="true" />
-              {isScanning ? 'Scanning...' : 'Scan GitHub Repo'}
+              {pendingImport?.kind === 'public' ? 'Scanning...' : 'Scan GitHub Repo'}
             </Button>
           </div>
+          <ScopeControls
+            idPrefix="public-github-repo"
+            scope={publicScope}
+            onChange={setPublicScope}
+            disabled={status !== 'connected' || importInProgress}
+          />
           {lastProgress && (
             <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
               {lastProgress.message}
@@ -137,13 +185,20 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
                   <p className="text-sm leading-6 text-muted-foreground">{repo.description}</p>
                   <p className="truncate text-xs text-muted-foreground">{repo.url}</p>
                 </div>
+                <ScopeControls
+                  idPrefix={`demo-repo-${repo.id}`}
+                  scope={repoScopes[repo.id] ?? EMPTY_SCOPE}
+                  onChange={(next) => updateRepoScope(repo.id, next)}
+                  disabled={status !== 'connected' || importInProgress}
+                  labelPrefix={repo.label}
+                />
                 <Button
                   className="mt-4 self-start gap-2"
                   onClick={() => handleImportDemo(repo.id)}
-                  disabled={status !== 'connected' || isScanning}
+                  disabled={status !== 'connected' || importInProgress}
                 >
                   <Play className="h-4 w-4" aria-hidden="true" />
-                  {isScanning ? 'Importing...' : 'Import Demo'}
+                  {pendingImport?.kind === 'demo' && pendingImport.repoId === repo.id ? 'Importing...' : 'Import Demo'}
                 </Button>
               </article>
             ))}
@@ -171,9 +226,75 @@ export function ScanPrompt({ wsClient }: ScanPromptProps) {
           onDismiss={clearError}
         />
       )}
-      <Button onClick={handleScan} disabled={status !== 'connected' || isScanning}>
+      <Button onClick={handleScan} disabled={status !== 'connected' || importInProgress}>
         {isScanning ? 'Scanning...' : 'Scan Project'}
       </Button>
+    </div>
+  );
+}
+
+function toScopePayload(scope: ScopeFormState): {
+  readonly scanRoot?: string;
+  readonly excludePaths?: readonly string[];
+} {
+  const scanRoot = scope.scanRoot.trim();
+  const excludePaths = scope.excludePaths
+    .split(/[\n,]/)
+    .map((path) => path.trim())
+    .filter((path) => path.length > 0);
+
+  return {
+    ...(scanRoot ? { scanRoot } : {}),
+    ...(excludePaths.length > 0 ? { excludePaths } : {}),
+  };
+}
+
+function ScopeControls({
+  idPrefix,
+  scope,
+  onChange,
+  disabled,
+  labelPrefix,
+}: {
+  readonly idPrefix: string;
+  readonly scope: ScopeFormState;
+  readonly onChange: (scope: ScopeFormState) => void;
+  readonly disabled: boolean;
+  readonly labelPrefix?: string;
+}) {
+  const scanRootLabel = labelPrefix ? `${labelPrefix} scan root path` : 'Scan root path';
+  const excludeLabel = labelPrefix ? `${labelPrefix} exclude directories` : 'Exclude directories';
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <div className="space-y-1">
+        <label htmlFor={`${idPrefix}-scan-root`} className="text-xs font-medium text-muted-foreground">
+          Root path
+        </label>
+        <Input
+          id={`${idPrefix}-scan-root`}
+          value={scope.scanRoot}
+          onChange={(event) => onChange({ ...scope, scanRoot: event.target.value })}
+          placeholder="."
+          disabled={disabled}
+          aria-label={scanRootLabel}
+          className="h-8 text-xs"
+        />
+      </div>
+      <div className="space-y-1">
+        <label htmlFor={`${idPrefix}-exclude-paths`} className="text-xs font-medium text-muted-foreground">
+          Exclude
+        </label>
+        <Input
+          id={`${idPrefix}-exclude-paths`}
+          value={scope.excludePaths}
+          onChange={(event) => onChange({ ...scope, excludePaths: event.target.value })}
+          placeholder="fixtures, dist"
+          disabled={disabled}
+          aria-label={excludeLabel}
+          className="h-8 text-xs"
+        />
+      </div>
     </div>
   );
 }

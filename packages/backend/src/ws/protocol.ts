@@ -5,6 +5,8 @@
  * and returns a ServerMessage for the caller to send back.
  */
 
+import { stat } from 'node:fs/promises';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { ZodError } from 'zod';
 import type {
   ClientMessage,
@@ -45,6 +47,7 @@ import { importDemoRepository, importPublicGithubRepository } from './demoReposi
 import type { ClientConnection, ProgressEmitter, ServerState } from './types.js';
 
 const logger = createLogger('protocol');
+const DEFAULT_SCAN_ROOT = '.';
 
 const VALID_TYPES = [
   'scan_project',
@@ -121,6 +124,8 @@ async function dispatch(
         return await handleImportDemoRepo(
           message.requestId,
           message.repoId,
+          message.scanRoot,
+          message.excludePaths,
           connection,
           state,
           emitProgress,
@@ -130,6 +135,8 @@ async function dispatch(
         return await handleImportPublicGithubRepo(
           message.requestId,
           message.url,
+          message.scanRoot,
+          message.excludePaths,
           connection,
           state,
           emitProgress,
@@ -289,6 +296,8 @@ async function handleScanProject(
 async function handleImportDemoRepo(
   requestId: string,
   repoId: string,
+  scanRoot: string | undefined,
+  excludePaths: readonly string[] | undefined,
   connection: ClientConnection,
   state: ServerState,
   emitProgress: ProgressEmitter,
@@ -310,9 +319,15 @@ async function handleImportDemoRepo(
       repositories: getAvailableDemoRepositories(connection, state),
       cacheDir: state.demoCacheDir,
     });
+    const scope = await resolveScanScope(imported.path, scanRoot, excludePaths);
 
     emitProgress(requestId, `Scanning ${imported.repository.label}...`, 0);
-    const result = await scanProject({ projectRoot: imported.path });
+    const result = await scanProject({
+      projectRoot: imported.path,
+      configRoot: imported.path,
+      scanRoot: scope.scanRoot,
+      additionalIgnorePaths: scope.excludePaths,
+    });
 
     connection.projectRoot = imported.path;
     connection.scanResult = result;
@@ -327,6 +342,9 @@ async function handleImportDemoRepo(
 
     return overview;
   } catch (error) {
+    if (error instanceof ScanScopeError) {
+      return createCatalogError(ErrorCatalog.VALIDATION_FAILED, requestId, error.message);
+    }
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.warn({ repoId, error: detail }, 'Demo repository import failed');
     return createCatalogError(ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE, requestId);
@@ -344,6 +362,8 @@ async function handleImportDemoRepo(
 async function handleImportPublicGithubRepo(
   requestId: string,
   url: string,
+  scanRoot: string | undefined,
+  excludePaths: readonly string[] | undefined,
   connection: ClientConnection,
   state: ServerState,
   emitProgress: ProgressEmitter,
@@ -373,9 +393,15 @@ async function handleImportPublicGithubRepo(
       cacheDir: state.demoCacheDir,
       existingRepositories: getAvailableDemoRepositories(connection, state),
     });
+    const scope = await resolveScanScope(imported.path, scanRoot, excludePaths);
 
     emitProgress(requestId, `Scanning ${imported.repository.label}...`, 0);
-    const result = await scanProject({ projectRoot: imported.path });
+    const result = await scanProject({
+      projectRoot: imported.path,
+      configRoot: imported.path,
+      scanRoot: scope.scanRoot,
+      additionalIgnorePaths: scope.excludePaths,
+    });
 
     connection.customDemoRepositories = upsertDemoRepository(
       connection.customDemoRepositories,
@@ -395,6 +421,9 @@ async function handleImportPublicGithubRepo(
 
     return overview;
   } catch (error) {
+    if (error instanceof ScanScopeError) {
+      return createCatalogError(ErrorCatalog.VALIDATION_FAILED, requestId, error.message);
+    }
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.warn({ url, error: detail }, 'Public GitHub repository import failed');
     return createCatalogError(ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE, requestId);
@@ -402,6 +431,98 @@ async function handleImportPublicGithubRepo(
     if (connection.demoImportRequestId === requestId) {
       connection.demoImportRequestId = null;
     }
+  }
+}
+
+class ScanScopeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScanScopeError';
+  }
+}
+
+interface ResolvedScanScope {
+  readonly scanRoot: string;
+  readonly excludePaths: readonly string[];
+}
+
+async function resolveScanScope(
+  repositoryRoot: string,
+  rawScanRoot: string | undefined,
+  rawExcludePaths: readonly string[] | undefined,
+): Promise<ResolvedScanScope> {
+  const scanRoot = normalizeScopePath(rawScanRoot, {
+    fieldName: 'scanRoot',
+    allowGlob: false,
+    allowDot: true,
+    defaultValue: DEFAULT_SCAN_ROOT,
+  });
+  const excludePaths = (rawExcludePaths ?? []).map((path) =>
+    normalizeScopePath(path, {
+      fieldName: 'excludePaths',
+      allowGlob: true,
+      allowDot: false,
+    }),
+  );
+
+  const absoluteRepositoryRoot = resolve(repositoryRoot);
+  const absoluteScanRoot = resolve(absoluteRepositoryRoot, scanRoot);
+  assertWithinRoot(absoluteRepositoryRoot, absoluteScanRoot, 'scanRoot');
+
+  let scanRootStats;
+  try {
+    scanRootStats = await stat(absoluteScanRoot);
+  } catch {
+    throw new ScanScopeError(`scanRoot does not exist: ${scanRoot}`);
+  }
+  if (!scanRootStats.isDirectory()) {
+    throw new ScanScopeError(`scanRoot is not a directory: ${scanRoot}`);
+  }
+
+  return { scanRoot, excludePaths };
+}
+
+function normalizeScopePath(
+  rawPath: string | undefined,
+  options: {
+    readonly fieldName: string;
+    readonly allowGlob: boolean;
+    readonly allowDot: boolean;
+    readonly defaultValue?: string;
+  },
+): string {
+  const trimmed = rawPath?.trim() ?? '';
+  if (!trimmed) {
+    if (options.defaultValue !== undefined) return options.defaultValue;
+    throw new ScanScopeError(`${options.fieldName} cannot be empty`);
+  }
+
+  const normalized = trimmed.replace(/^\/+|\/+$/g, '');
+  if (options.allowDot && (trimmed === '.' || normalized === '')) {
+    return DEFAULT_SCAN_ROOT;
+  }
+  if (!options.allowDot && (trimmed === '.' || normalized === '')) {
+    throw new ScanScopeError(`${options.fieldName} must name a repository-relative path`);
+  }
+  if (trimmed.includes('\\') || isAbsolute(trimmed)) {
+    throw new ScanScopeError(`${options.fieldName} must be repository-relative`);
+  }
+  if (!options.allowGlob && /[*?[\]{}]/.test(normalized)) {
+    throw new ScanScopeError(`${options.fieldName} cannot contain glob characters`);
+  }
+
+  const segments = normalized.split('/');
+  if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+    throw new ScanScopeError(`${options.fieldName} contains an invalid path segment`);
+  }
+
+  return normalized;
+}
+
+function assertWithinRoot(root: string, candidate: string, fieldName: string): void {
+  const relativePath = relative(root, candidate);
+  if (relativePath.startsWith('..') || isAbsolute(relativePath)) {
+    throw new ScanScopeError(`${fieldName} must stay inside the repository`);
   }
 }
 

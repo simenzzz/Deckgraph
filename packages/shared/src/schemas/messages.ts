@@ -56,12 +56,16 @@ export const importDemoRepoMessageSchema = z.object({
   type: z.literal('import_demo_repo'),
   requestId: z.string().min(1).max(128),
   repoId: z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/),
+  scanRoot: z.string().min(1).max(1024).optional(),
+  excludePaths: z.array(z.string().min(1).max(512)).max(256).optional(),
 });
 
 export const importPublicGithubRepoMessageSchema = z.object({
   type: z.literal('import_public_github_repo'),
   requestId: z.string().min(1).max(128),
   url: z.string().min(1).max(2048),
+  scanRoot: z.string().min(1).max(1024).optional(),
+  excludePaths: z.array(z.string().min(1).max(512)).max(256).optional(),
 });
 
 export const scanWorkspaceMessageSchema = z.object({
