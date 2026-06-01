@@ -1,11 +1,3 @@
-/**
- * Concern tagger: assigns concern tags to dependencies.
- *
- * Pure function that returns new Module objects with concerns populated.
- * Looks up each dependency in the built-in tag database, then merges
- * user overrides from project config.
- */
-
 import type { Dependency, Module, ProjectConfig } from '@deckgraph/shared';
 import { CONCERN_TAG_DB } from './tags/index.js';
 

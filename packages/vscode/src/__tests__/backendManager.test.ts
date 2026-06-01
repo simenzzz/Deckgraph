@@ -11,9 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { spawn as actualSpawn } from 'child_process';
 
-// ---------------------------------------------------------------------------
 // Mock: VS Code API
-// ---------------------------------------------------------------------------
 
 vi.mock('vscode', () => {
   const disposables: Array<{ dispose(): void }> = [];
@@ -57,9 +55,7 @@ vi.mock('vscode', () => {
   };
 });
 
-// ---------------------------------------------------------------------------
 // Mock: child_process
-// ---------------------------------------------------------------------------
 
 interface MockChildProcess {
   stdout: { on: ReturnType<typeof vi.fn> };
@@ -77,9 +73,7 @@ vi.mock('child_process', () => ({
 
 const mockedSpawn = vi.mocked(actualSpawn);
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function createMockChildProcess(): MockChildProcess {
   const cp: MockChildProcess = {
@@ -101,9 +95,7 @@ function createMockContext(backendPath: string) {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Tests
-// ---------------------------------------------------------------------------
 
 describe('BackendManager', () => {
   let BackendManager: typeof import('../backendManager').BackendManager;

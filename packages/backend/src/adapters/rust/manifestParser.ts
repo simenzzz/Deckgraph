@@ -16,9 +16,7 @@ import { readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('rust-manifest-parser');
 
-// ============================================================================
 // Internal Zod Schemas
-// ============================================================================
 
 const cargoPackageSchema = z.object({
   name: z.string().optional(),
@@ -49,9 +47,7 @@ const cargoLockSchema = z.object({
   package: z.array(cargoLockPackageSchema).optional(),
 }).passthrough();
 
-// ============================================================================
 // Scope Mapping
-// ============================================================================
 
 const SCOPE_SECTIONS: readonly {
   readonly key: 'dependencies' | 'dev-dependencies' | 'build-dependencies';
@@ -62,18 +58,14 @@ const SCOPE_SECTIONS: readonly {
   { key: 'build-dependencies', scope: 'build' },
 ];
 
-// ============================================================================
 // Lock File Types
-// ============================================================================
 
 interface ResolvedVersions {
   readonly versions: ReadonlyMap<string, string>;
   readonly lockFileName: string;
 }
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 /**
  * Parse Cargo.toml and Cargo.lock from a module directory.
@@ -111,9 +103,7 @@ export async function parseRustManifests(
   return parseManifestResult(result);
 }
 
-// ============================================================================
 // Dependency Extraction
-// ============================================================================
 
 /**
  * Extract a version constraint from a Cargo dependency value.
@@ -176,9 +166,7 @@ function extractDependencies(
   return deps;
 }
 
-// ============================================================================
 // Cargo.lock Parsing
-// ============================================================================
 
 /**
  * Try to read and parse Cargo.lock from module dir or project root.
@@ -229,9 +217,7 @@ function parseCargoLockPackages(
   return versions;
 }
 
-// ============================================================================
 // Metadata
-// ============================================================================
 
 function buildMetadata(cargo: z.infer<typeof cargoTomlSchema>): Record<string, unknown> {
   const metadata: Record<string, unknown> = {};

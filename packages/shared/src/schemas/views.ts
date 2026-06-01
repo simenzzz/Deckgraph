@@ -21,9 +21,7 @@ import {
 import type { ViewQuery, ModuleView, ViewSummary, ViewResult } from '../types/views.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
-// ============================================================================
 // View Query
-// ============================================================================
 
 export const viewQuerySchema = z.object({
   ecosystems: z.array(ecosystemSchema).max(5).optional(),
@@ -37,9 +35,7 @@ export const viewQuerySchema = z.object({
   analysisLevel: z.enum(['manifest', 'imports', 'registry']).optional(),
 });
 
-// ============================================================================
 // Module View
-// ============================================================================
 
 export const moduleViewSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -50,9 +46,7 @@ export const moduleViewSchema = z.object({
   totalDependencyCount: z.number().int().nonnegative(),
 });
 
-// ============================================================================
 // View Summary
-// ============================================================================
 
 export const viewSummarySchema = z.object({
   totalDeps: z.number().int().nonnegative(),
@@ -76,9 +70,7 @@ export const viewSummarySchema = z.object({
   crossEdgeCount: z.number().int().nonnegative(),
 });
 
-// ============================================================================
 // View Result
-// ============================================================================
 
 export const viewResultSchema = z.object({
   modules: z.array(moduleViewSchema).max(1000),
@@ -86,18 +78,14 @@ export const viewResultSchema = z.object({
   summary: viewSummarySchema,
 });
 
-// ============================================================================
 // Parse Functions
-// ============================================================================
 
 export const parseViewQuery = (value: unknown) => viewQuerySchema.parse(value);
 export const parseModuleView = (value: unknown) => moduleViewSchema.parse(value);
 export const parseViewSummary = (value: unknown) => viewSummarySchema.parse(value);
 export const parseViewResult = (value: unknown) => viewResultSchema.parse(value);
 
-// ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
-// ============================================================================
 
 // Exported to satisfy noUnusedLocals.
 

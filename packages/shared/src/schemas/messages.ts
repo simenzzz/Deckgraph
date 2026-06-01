@@ -43,9 +43,7 @@ import type {
 } from '../types/messages.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
-// ============================================================================
 // Client Messages (UI → Backend)
-// ============================================================================
 
 export const scanProjectMessageSchema = z.object({
   type: z.literal('scan_project'),
@@ -145,9 +143,7 @@ export const clientMessageSchema = z.discriminatedUnion('type', [
   packageBatchMessageSchema,
 ]);
 
-// ============================================================================
 // Server Messages (Backend → UI)
-// ============================================================================
 
 export const projectOverviewMessageSchema = z.object({
   type: z.literal('project_overview'),
@@ -256,9 +252,7 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
   readyMessageSchema,
 ]);
 
-// ============================================================================
 // Parse Functions
-// ============================================================================
 
 export const parseClientMessage = (value: unknown) => clientMessageSchema.parse(value);
 export const parseScanProjectMessage = (value: unknown) => scanProjectMessageSchema.parse(value);
@@ -305,9 +299,7 @@ export const parsePackageBatchResultMessage = (value: unknown) =>
 
 export const parseReadyMessage = (value: unknown) => readyMessageSchema.parse(value);
 
-// ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
-// ============================================================================
 
 // Exported to satisfy noUnusedLocals.
 

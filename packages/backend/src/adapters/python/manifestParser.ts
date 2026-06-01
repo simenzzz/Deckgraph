@@ -19,9 +19,7 @@ import { readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('python-manifest-parser');
 
-// ============================================================================
 // Internal Zod Schemas
-// ============================================================================
 
 const pyprojectTomlSchema = z.object({
   project: z.object({
@@ -67,18 +65,14 @@ const pipfileLockSchema = z.object({
   }).passthrough()).optional(),
 }).passthrough();
 
-// ============================================================================
 // Lock File Types
-// ============================================================================
 
 interface ResolvedVersions {
   readonly versions: ReadonlyMap<string, string>;
   readonly lockFileName: string;
 }
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 /**
  * Parse Python manifests from a module directory.
@@ -119,9 +113,7 @@ export async function parsePythonManifests(
   );
 }
 
-// ============================================================================
 // PEP 508 Parser
-// ============================================================================
 
 interface Pep508Parsed {
   readonly name: string;
@@ -163,9 +155,7 @@ function parsePep508(spec: string): Pep508Parsed {
   return { name, constraint };
 }
 
-// ============================================================================
 // pyproject.toml Parsing
-// ============================================================================
 
 /**
  * Parse pyproject.toml content. Detects PEP 621 vs Poetry layout.
@@ -308,9 +298,7 @@ function extractPoetryConstraint(value: unknown): string {
   return '*';
 }
 
-// ============================================================================
 // requirements.txt Parsing
-// ============================================================================
 
 /**
  * Parse requirements.txt content.
@@ -352,9 +340,7 @@ async function parseRequirementsTxt(
   return parseManifestResult(result);
 }
 
-// ============================================================================
 // Pipfile Parsing
-// ============================================================================
 
 /**
  * Parse Pipfile content (TOML).
@@ -416,9 +402,7 @@ function extractPipfileConstraint(value: unknown): string {
   return '*';
 }
 
-// ============================================================================
 // setup.cfg Parsing
-// ============================================================================
 
 /**
  * Parse setup.cfg content using Python configparser-compatible logic.
@@ -536,9 +520,7 @@ function splitMultiline(value: string | undefined): readonly string[] {
     .filter((line) => line.length > 0);
 }
 
-// ============================================================================
 // Lock File Parsing
-// ============================================================================
 
 /**
  * Try to read poetry.lock from module dir or project root.

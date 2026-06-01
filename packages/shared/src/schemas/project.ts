@@ -32,9 +32,7 @@ import type {
 } from '../types/project.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
-// ============================================================================
 // Basic Enums
-// ============================================================================
 
 export const ecosystemSchema = z.enum(['npm', 'pypi', 'cargo', 'go', 'maven']);
 
@@ -48,9 +46,7 @@ export const dependencyScopeSchema = z.enum(['runtime', 'dev', 'build', 'optiona
 
 export const crossEdgeTypeSchema = z.enum(['proto', 'openapi', 'ffi', 'build', 'shared-config']);
 
-// ============================================================================
 // Registry Metadata
-// ============================================================================
 
 export const registryMetaSchema = z.object({
   latestVersion: z.string().min(1).max(256),
@@ -62,9 +58,7 @@ export const registryMetaSchema = z.object({
   publishedAt: z.string().datetime().nullable(),
 });
 
-// ============================================================================
 // Cross Edge Types
-// ============================================================================
 
 export const crossEdgeEndpointSchema = z.object({
   module: z.string().min(1).max(1024),
@@ -79,9 +73,7 @@ export const crossEdgeSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
-// ============================================================================
 // Dependency Type
-// ============================================================================
 
 export const dependencySchema = z.object({
   name: z.string().min(1).max(512),
@@ -96,9 +88,7 @@ export const dependencySchema = z.object({
   registryMeta: registryMetaSchema.nullable(),
 });
 
-// ============================================================================
 // Module Types
-// ============================================================================
 
 export const moduleSchema = z.object({
   path: z.string().min(1).max(1024),
@@ -109,18 +99,14 @@ export const moduleSchema = z.object({
   analysisState: analysisStateSchema,
 });
 
-// ============================================================================
 // Project Config
-// ============================================================================
 
 export const projectConfigSchema = z.object({
   ignorePaths: z.array(z.string().min(1).max(512)).max(256),
   concernOverrides: z.record(z.string().min(1).max(512), z.array(z.string().min(1).max(128)).max(64)),
 });
 
-// ============================================================================
 // Project Type
-// ============================================================================
 
 export const projectSchema = z.object({
   root: z.string().min(1).max(1024),
@@ -130,9 +116,7 @@ export const projectSchema = z.object({
   lastScannedAt: z.string().datetime(),
 });
 
-// ============================================================================
 // Workspace Types
-// ============================================================================
 
 export const hookEntrySchema = z.object({
   cmd: z.string().min(1).max(4096),
@@ -177,9 +161,7 @@ export const demoRepositorySchema = z.object({
   description: z.string().min(1).max(512),
 });
 
-// ============================================================================
 // Parse Functions
-// ============================================================================
 
 export const parseEcosystem = (value: unknown) => ecosystemSchema.parse(value);
 export const parseAnalysisState = (value: unknown) => analysisStateSchema.parse(value);
@@ -201,9 +183,7 @@ export const parseCrossRootDependency = (value: unknown) => crossRootDependencyS
 export const parseWorkspace = (value: unknown) => workspaceSchema.parse(value);
 export const parseDemoRepository = (value: unknown) => demoRepositorySchema.parse(value);
 
-// ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
-// ============================================================================
 
 // Forward: Zod output extends interface (catches extra schema fields)
 // Reverse: Mutable<Interface> extends Zod output (catches missing schema fields)

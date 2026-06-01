@@ -164,9 +164,7 @@ export interface UnifiedGraph {
   readonly crossEdges: readonly CrossEdge[];
 }
 
-// ============================================================================
 // Workspace Types (Polyrepo Support)
-// ============================================================================
 
 /**
  * Hook event types for developer callbacks.

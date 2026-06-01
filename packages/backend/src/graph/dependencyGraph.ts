@@ -1,23 +1,10 @@
-/**
- * Unified dependency graph construction.
- *
- * Builds a DAG from modules and their dependencies using adjacency lists.
- * All functions are pure — they return new graphs, never mutate.
- */
-
 import type { Ecosystem, Module, UnifiedGraph } from '@deckgraph/shared';
 
-/**
- * Build a canonical key for a dependency node.
- * Format: "ecosystem:packageName" (e.g. "npm:react").
- */
+// Key format: "ecosystem:name" e.g. "npm:react"
 export function depKey(ecosystem: Ecosystem, name: string): string {
   return `${ecosystem}:${name}`;
 }
 
-/**
- * Create an empty unified graph with no modules or edges.
- */
 export function emptyGraph(): UnifiedGraph {
   return {
     modules: new Map(),
@@ -27,13 +14,6 @@ export function emptyGraph(): UnifiedGraph {
   };
 }
 
-/**
- * Build a unified graph from an array of modules.
- *
- * For each module, creates forward edges from the module path to each
- * dependency key, and reverse edges from each dependency key back to
- * the module path.
- */
 export function buildGraph(modules: readonly Module[]): UnifiedGraph {
   const moduleMap = new Map<string, Module>();
   const forward = new Map<string, Set<string>>();

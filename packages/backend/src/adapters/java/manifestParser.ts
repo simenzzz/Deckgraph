@@ -17,9 +17,7 @@ import { readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('java-manifest-parser');
 
-// ============================================================================
 // Internal Zod Schemas
-// ============================================================================
 
 const mavenDependencySchema = z.object({
   groupId: z.string(),
@@ -41,9 +39,7 @@ const pomXmlSchema = z.object({
   }),
 }).passthrough();
 
-// ============================================================================
 // Scope Mapping
-// ============================================================================
 
 const MAVEN_SCOPE_MAP: Record<string, DependencyScope> = {
   compile: 'runtime',
@@ -63,18 +59,14 @@ const GRADLE_SCOPE_MAP: Record<string, DependencyScope> = {
   annotationProcessor: 'build',
 };
 
-// ============================================================================
 // Lock File Types
-// ============================================================================
 
 interface ResolvedVersions {
   readonly versions: ReadonlyMap<string, string>;
   readonly lockFileName: string;
 }
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 /**
  * Parse Java manifest (pom.xml or build.gradle) and lock files.
@@ -107,9 +99,7 @@ export async function parseJavaManifests(
   throw new Error(`No Java manifest found in ${moduleDir} (tried pom.xml, build.gradle, build.gradle.kts)`);
 }
 
-// ============================================================================
 // pom.xml Parsing
-// ============================================================================
 
 /**
  * Parse a pom.xml file.
@@ -185,9 +175,7 @@ function interpolateProperties(
   });
 }
 
-// ============================================================================
 // build.gradle / build.gradle.kts Parsing
-// ============================================================================
 
 /**
  * Extract dependencies from a Gradle build file using regex.
@@ -254,9 +242,7 @@ function extractGradleModuleName(content: string): string | null {
   return null;
 }
 
-// ============================================================================
 // gradle.lockfile Parsing
-// ============================================================================
 
 /**
  * Try to read and parse gradle.lockfile from module dir or project root.
@@ -311,9 +297,7 @@ function parseGradleLockfile(content: string): ReadonlyMap<string, string> {
   return versions;
 }
 
-// ============================================================================
 // Metadata
-// ============================================================================
 
 function buildMavenMetadata(
   pom: z.infer<typeof pomXmlSchema>['project'],

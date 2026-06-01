@@ -9,9 +9,7 @@ import type { PackageActionResult, PackageBatchOperation } from './actions.js';
 import type { DemoRepository, Dependency, DependencyScope, Ecosystem, Module, Project, Workspace } from './project.js';
 import type { ViewQuery, ViewResult } from './views.js';
 
-// ============================================================================
 // Client Messages (UI → Backend)
-// ============================================================================
 
 /**
  * Discriminated union of all client message types.
@@ -154,9 +152,7 @@ export interface PackageBatchMessage {
   readonly operations: readonly PackageBatchOperation[];
 }
 
-// ============================================================================
 // Server Messages (Backend → UI)
-// ============================================================================
 
 /**
  * Discriminated union of all server message types.

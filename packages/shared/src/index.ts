@@ -4,9 +4,7 @@
  * Shared types and Zod schemas for Deckgraph.
  */
 
-// ============================================================================
 // Types - Project
-// ============================================================================
 
 export type {
   Ecosystem,
@@ -31,9 +29,7 @@ export type {
   DemoRepository,
 } from './types/project.js';
 
-// ============================================================================
 // Types - Adapters
-// ============================================================================
 
 export type {
   EcosystemAdapter,
@@ -44,15 +40,11 @@ export type {
   MinimalDependency,
 } from './types/adapters.js';
 
-// ============================================================================
 // Types - Views
-// ============================================================================
 
 export type { ViewQuery, ViewResult, ModuleView, ViewSummary, OutdatedSeverity } from './types/views.js';
 
-// ============================================================================
 // Types - Actions
-// ============================================================================
 
 export type {
   PackageAction,
@@ -61,9 +53,7 @@ export type {
   PackageBatchOperation,
 } from './types/actions.js';
 
-// ============================================================================
 // Types - Messages
-// ============================================================================
 
 export type {
   ClientMessage,
@@ -95,9 +85,7 @@ export type {
   ReadyMessage,
 } from './types/messages.js';
 
-// ============================================================================
 // Schemas - Project
-// ============================================================================
 
 export {
   ecosystemSchema,
@@ -137,9 +125,7 @@ export {
   parseDemoRepository,
 } from './schemas/project.js';
 
-// ============================================================================
 // Schemas - Adapters
-// ============================================================================
 
 export {
   parsedImportSchema,
@@ -149,9 +135,7 @@ export {
   parseManifestResult,
 } from './schemas/adapters.js';
 
-// ============================================================================
 // Schemas - Views
-// ============================================================================
 
 export {
   viewQuerySchema,
@@ -164,9 +148,7 @@ export {
   parseViewResult,
 } from './schemas/views.js';
 
-// ============================================================================
 // Schemas - Actions
-// ============================================================================
 
 export {
   packageActionSchema,
@@ -179,15 +161,11 @@ export {
   parsePackageBatchOperation,
 } from './schemas/actions.js';
 
-// ============================================================================
 // Analysis
-// ============================================================================
 
 export { classifyOutdated } from './analysis/outdated.js';
 
-// ============================================================================
 // Schemas - Messages
-// ============================================================================
 
 export {
   scanProjectMessageSchema,

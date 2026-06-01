@@ -20,18 +20,14 @@ interface GoModRequire {
   readonly indirect: boolean;
 }
 
-// ============================================================================
 // Lock File Types
-// ============================================================================
 
 interface ResolvedVersions {
   readonly versions: ReadonlyMap<string, string>;
   readonly lockFileName: string;
 }
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 /**
  * Parse go.mod and go.sum from a module directory.
@@ -60,9 +56,7 @@ export async function parseGoManifests(
   return parseManifestResult(result);
 }
 
-// ============================================================================
 // go.mod Parsing
-// ============================================================================
 
 interface GoModParsed {
   readonly modulePath: string;
@@ -164,9 +158,7 @@ function parseGoMod(content: string): GoModParsed {
   return { modulePath, goVersion, requires, replaces };
 }
 
-// ============================================================================
 // go.sum Parsing
-// ============================================================================
 
 /**
  * Try to read and parse go.sum from module dir or project root.
@@ -225,9 +217,7 @@ function parseGoSum(content: string): ReadonlyMap<string, string> {
   return versions;
 }
 
-// ============================================================================
 // Dependency Building
-// ============================================================================
 
 /**
  * Build dependencies list applying replacements and resolved versions.
@@ -252,9 +242,7 @@ function buildDependencies(
   });
 }
 
-// ============================================================================
 // Metadata
-// ============================================================================
 
 function buildMetadata(parsed: GoModParsed): Record<string, unknown> {
   const metadata: Record<string, unknown> = {};

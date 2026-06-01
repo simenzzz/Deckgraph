@@ -17,17 +17,13 @@ import type {
 } from '../types/actions.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
-// ============================================================================
 // Enums
-// ============================================================================
 
 export const packageActionSchema = z.enum(['update', 'install', 'remove']);
 
 export const packageActionStatusSchema = z.enum(['success', 'failure', 'rolled-back']);
 
-// ============================================================================
 // Composite Schemas
-// ============================================================================
 
 export const packageActionResultSchema = z.object({
   action: packageActionSchema,
@@ -50,9 +46,7 @@ export const packageBatchOperationSchema = z.object({
   scope: dependencyScopeSchema.nullable(),
 });
 
-// ============================================================================
 // Parse Functions
-// ============================================================================
 
 export const parsePackageAction = (value: unknown) => packageActionSchema.parse(value);
 export const parsePackageActionStatus = (value: unknown) => packageActionStatusSchema.parse(value);
@@ -60,9 +54,7 @@ export const parsePackageActionResult = (value: unknown) => packageActionResultS
 export const parsePackageBatchOperation = (value: unknown) =>
   packageBatchOperationSchema.parse(value);
 
-// ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
-// ============================================================================
 
 export type _ActionSchemaAssertions = [
   // Forward: ZodOutput ⊆ Interface

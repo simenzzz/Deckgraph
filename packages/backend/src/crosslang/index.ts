@@ -17,9 +17,6 @@ import { createLogger } from '../logger.js';
 
 const logger = createLogger('crosslang');
 
-/**
- * Create all 5 cross-language edge detectors.
- */
 function createDetectors(): readonly EdgeDetector[] {
   return [
     createProtoDetector(),

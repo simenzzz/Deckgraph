@@ -21,9 +21,7 @@ import type {
   DependencyScope,
 } from '@deckgraph/shared';
 
-// ---------------------------------------------------------------------------
 // Extension state
-// ---------------------------------------------------------------------------
 
 let backendManager: BackendManager | undefined;
 let wsClient: WsClient | undefined;
@@ -32,9 +30,7 @@ let webviewProvider: DeckgraphWebviewProvider | undefined;
 let codeLensProvider: DeckgraphCodeLensProvider | undefined;
 let currentViewResult: ViewResult | null = null;
 
-// ---------------------------------------------------------------------------
 // Activation
-// ---------------------------------------------------------------------------
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   // --- Backend Manager ---
@@ -148,9 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   backendManager.start();
 }
 
-// ---------------------------------------------------------------------------
 // WS connection
-// ---------------------------------------------------------------------------
 
 function connectWs(): void {
   if (!backendManager) {
@@ -226,9 +220,7 @@ function handleServerMessage(message: ServerMessage): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Deactivation
-// ---------------------------------------------------------------------------
 
 export function deactivate(): void {
   wsClient?.disconnect();

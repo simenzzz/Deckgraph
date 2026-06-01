@@ -17,9 +17,7 @@ import {
 import type { ParsedImport, ManifestResult, MinimalDependency } from '../types/adapters.js';
 import type { Expect, Mutable } from '../types/typeUtils.js';
 
-// ============================================================================
 // Parsed Import
-// ============================================================================
 
 export const parsedImportSchema = z.object({
   source: z.string().min(1).max(512),
@@ -28,9 +26,7 @@ export const parsedImportSchema = z.object({
   line: z.number().int().positive(),
 });
 
-// ============================================================================
 // Manifest Result
-// ============================================================================
 
 /**
  * Minimal dependency schema for adapter manifest parsing results.
@@ -71,24 +67,18 @@ export const manifestResultSchema = z.object({
   metadata: safeMetadataSchema,
 });
 
-// ============================================================================
 // Registry Metadata
-// ============================================================================
 
 // Re-export from project.ts - single source of truth
 export { projectRegistryMetaSchema as registryMetaSchema };
 
-// ============================================================================
 // Parse Functions
-// ============================================================================
 
 export const parseParsedImport = (value: unknown) => parsedImportSchema.parse(value);
 export const parseManifestResult = (value: unknown) => manifestResultSchema.parse(value);
 export const parseAdapterRegistryMeta = (value: unknown) => projectRegistryMetaSchema.parse(value);
 
-// ============================================================================
 // Compile-time Assertions: bidirectional schema ↔ interface compatibility
-// ============================================================================
 
 // Exported to satisfy noUnusedLocals.
 

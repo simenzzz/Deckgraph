@@ -1,10 +1,3 @@
-/**
- * WebSocket message routing and handler dispatch.
- *
- * Zod-validates incoming messages, dispatches to the correct handler,
- * and returns a ServerMessage for the caller to send back.
- */
-
 import { stat } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { ZodError } from 'zod';

@@ -10,9 +10,7 @@ import WebSocket from 'ws';
 import { serverMessageSchema } from '@deckgraph/shared';
 import type { ClientMessage, ServerMessage } from '@deckgraph/shared';
 
-// ---------------------------------------------------------------------------
 // Types
-// ---------------------------------------------------------------------------
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
@@ -38,26 +36,20 @@ export interface WsClient {
   getStatus(): ConnectionStatus;
 }
 
-// ---------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
 
 const MIN_BACKOFF_MS = 1_000;
 const MAX_BACKOFF_MS = 30_000;
 const BACKOFF_MULTIPLIER = 2;
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 /** Generate a unique request ID. */
 function createRequestId(): string {
   return `req-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-// ---------------------------------------------------------------------------
 // Factory
-// ---------------------------------------------------------------------------
 
 /**
  * Create a typed, reconnecting WebSocket client backed by the `ws` package.

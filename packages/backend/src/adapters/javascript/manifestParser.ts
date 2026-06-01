@@ -16,9 +16,7 @@ import { readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('js-manifest-parser');
 
-// ============================================================================
 // Internal Zod Schemas (validate raw file formats)
-// ============================================================================
 
 const packageJsonSchema = z
   .object({
@@ -47,18 +45,14 @@ const npmLockSchema = z.object({
 
 type PackageJson = z.infer<typeof packageJsonSchema>;
 
-// ============================================================================
 // Lock File Types
-// ============================================================================
 
 interface ResolvedVersions {
   readonly versions: ReadonlyMap<string, string>;
   readonly lockFileName: string;
 }
 
-// ============================================================================
 // Scope Mapping
-// ============================================================================
 
 const SCOPE_SECTIONS: readonly {
   readonly key: keyof Pick<PackageJson, 'dependencies' | 'devDependencies' | 'peerDependencies' | 'optionalDependencies'>;
@@ -70,9 +64,7 @@ const SCOPE_SECTIONS: readonly {
   { key: 'optionalDependencies', scope: 'optional' },
 ];
 
-// ============================================================================
 // Public API
-// ============================================================================
 
 /**
  * Parse package.json and lock files from a module directory.
@@ -116,9 +108,7 @@ export async function parseJsManifests(
   return parseManifestResult(result);
 }
 
-// ============================================================================
 // Dependency Extraction
-// ============================================================================
 
 /**
  * Extract dependencies from all scope sections of package.json.
@@ -157,9 +147,7 @@ function isWorkspaceRef(constraint: string): boolean {
   return constraint.startsWith('workspace:');
 }
 
-// ============================================================================
 // Lock File Reading
-// ============================================================================
 
 /**
  * Try to read and parse a lock file.
@@ -248,9 +236,7 @@ async function tryNpmLock(
   return null;
 }
 
-// ============================================================================
 // Lock File Parsing
-// ============================================================================
 
 /**
  * Parse pnpm-lock.yaml v9 packages record.
@@ -332,9 +318,7 @@ function parseNpmLockPackages(
   return versions;
 }
 
-// ============================================================================
 // Metadata
-// ============================================================================
 
 /**
  * Build ecosystem-specific metadata from package.json.
