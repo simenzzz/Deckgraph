@@ -58,6 +58,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   updateDependency: (updated) =>
     set((state) => {
       if (!state.project) return state;
+      const registryMeta = updated.registryMeta;
       return {
         ...state,
         project: {
@@ -70,7 +71,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             return {
               ...m,
               dependencies: m.dependencies.map((d) =>
-                d.name === updated.name && d.ecosystem === updated.ecosystem ? updated : d,
+                d.name === updated.name && d.ecosystem === updated.ecosystem
+                  ? { ...d, registryMeta }
+                  : d,
               ),
             };
           }),

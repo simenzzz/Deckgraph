@@ -8,6 +8,7 @@ import { dispatchServerMessage } from '@/lib/messageDispatcher';
 import { useActionStore } from '@/stores/actionStore';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { useDetailStore } from '@/stores/detailStore';
+import { useHealthPrereqStore } from '@/stores/healthPrereqStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useViewStore } from '@/stores/viewStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
@@ -55,7 +56,8 @@ describe('dispatchServerMessage', () => {
       analysisRequestId: null,
     });
     useWorkspaceStore.setState({ workspace: null, activeProjectRoot: null });
-    useDetailStore.setState({ selectedDep: null, isEnriching: false, enrichmentRequestId: null });
+    useDetailStore.setState({ selectedDep: null, isEnriching: false, enrichmentRequestId: null, enrichError: null });
+    useHealthPrereqStore.getState().reset();
     useActionStore.setState({
       inProgress: new Map(),
       lastResult: null,
@@ -138,6 +140,27 @@ describe('dispatchServerMessage', () => {
     dispatchServerMessage(msg);
     expect(useProjectStore.getState().lastProgress).toEqual(msg);
     expect(useProjectStore.getState().isScanning).toBe(true);
+  });
+
+  it('routes health prerequisite progress to the health store', () => {
+    const target = {
+      kind: 'imports' as const,
+      targetId: 'pkg/a',
+      label: 'a',
+      modulePath: 'pkg/a',
+    };
+    useHealthPrereqStore.getState().startBatch('imports', [target]);
+    useHealthPrereqStore.getState().markSent('health-1', target);
+
+    dispatchServerMessage({
+      type: 'progress',
+      requestId: 'health-1',
+      message: 'Analyzing imports for a...',
+      phase: 0,
+    });
+
+    expect(useHealthPrereqStore.getState().active?.progress).toBe('Analyzing imports for a...');
+    expect(useProjectStore.getState().lastProgress).toBeNull();
   });
 
   it('dispatches error to connectionStore and clears loading', () => {
@@ -225,6 +248,45 @@ describe('dispatchServerMessage', () => {
     expect(useProjectStore.getState().project?.modules[0].analysisState).toBe('imports-resolved');
   });
 
+  it('completes matching health import requests on module_updated', () => {
+    const target = {
+      kind: 'imports' as const,
+      targetId: 'pkg/a',
+      label: 'a',
+      modulePath: 'pkg/a',
+    };
+    useHealthPrereqStore.getState().startBatch('imports', [target]);
+    useHealthPrereqStore.getState().markSent('r1', target);
+
+    useProjectStore.getState().setProject({
+      ...mockProject,
+      modules: [{
+        path: 'pkg/a',
+        name: 'a',
+        ecosystem: 'npm',
+        manifests: ['package.json'],
+        dependencies: [],
+        analysisState: 'manifest-only',
+      }],
+    });
+
+    dispatchServerMessage({
+      type: 'module_updated',
+      requestId: 'r1',
+      module: {
+        path: 'pkg/a',
+        name: 'a',
+        ecosystem: 'npm',
+        manifests: ['package.json'],
+        dependencies: [],
+        analysisState: 'imports-resolved',
+      },
+    });
+
+    expect(useHealthPrereqStore.getState().completed).toBe(1);
+    expect(useHealthPrereqStore.getState().isRunning).toBe(false);
+  });
+
   it('dispatches dependency_enriched to projectStore and detailStore', () => {
     const enrichedDep = {
       name: 'react',
@@ -307,6 +369,37 @@ describe('dispatchServerMessage', () => {
       suggestion: 'Check the package name',
     });
     expect(useDetailStore.getState().isEnriching).toBe(false);
+    // Enrichment errors are surfaced in-panel, not as a global toast.
+    expect(useDetailStore.getState().enrichError).toEqual({
+      message: 'Package not found',
+      suggestion: 'Check the package name',
+    });
+    expect(useConnectionStore.getState().lastError).not.toBe('Package not found');
+  });
+
+  it('routes matching health prerequisite errors to the health store', () => {
+    const target = {
+      kind: 'registry' as const,
+      targetId: 'npm:missing',
+      label: 'missing',
+      ecosystem: 'npm' as const,
+      packageName: 'missing',
+      modulePath: 'pkg/a',
+    };
+    useHealthPrereqStore.getState().startBatch('registry', [target]);
+    useHealthPrereqStore.getState().markSent('health-1', target);
+
+    dispatchServerMessage({
+      type: 'error',
+      requestId: 'health-1',
+      message: 'Package not found',
+      suggestion: 'Check the package name',
+    });
+
+    expect(useHealthPrereqStore.getState().failures).toEqual([
+      { targetId: 'npm:missing', label: 'missing', message: 'Package not found' },
+    ]);
+    expect(useConnectionStore.getState().lastError).toBeNull();
   });
 
   it('dispatches file_change_detected to projectStore', () => {

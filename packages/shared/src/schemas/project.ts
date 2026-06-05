@@ -82,6 +82,7 @@ export const dependencySchema = z.object({
   constraint: z.string().max(512),
   scope: dependencyScopeSchema,
   source: z.enum(['manifest', 'import-only', 'both']),
+  local: z.boolean().optional(),
   concerns: z.array(z.string().min(1).max(128)).max(64),
   usedInFiles: z.array(z.string().min(1).max(1024)).max(10000).nullable(),
   transitiveDeps: z.array(z.string().min(1).max(512)).max(10000).nullable(),

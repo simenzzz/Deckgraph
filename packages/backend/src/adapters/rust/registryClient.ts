@@ -5,7 +5,7 @@
  * Note: crates.io requires a User-Agent header and has strict rate limits (1 req/s).
  */
 
-import type { RegistryMeta } from '@deckgraph/shared';
+import type { RegistryMeta, RegistryQueryResult } from '@deckgraph/shared';
 import type { RegistryCache } from '../registryCache.js';
 import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { createLogger } from '../../logger.js';
@@ -42,9 +42,9 @@ export async function queryCargoRegistry(
   crateName: string,
   cache: RegistryCache,
   rateLimiter: RegistryRateLimiter,
-): Promise<RegistryMeta | null> {
+): Promise<RegistryQueryResult> {
   const cached = cache.get('cargo', crateName);
-  if (cached) return cached;
+  if (cached) return { status: 'found', meta: cached };
 
   await rateLimiter.acquire('cargo');
 
@@ -60,13 +60,13 @@ export async function queryCargoRegistry(
     if (!response.ok) {
       if (response.status === 404) {
         logger.debug({ crateName }, 'Crate not found on crates.io');
-        return null;
+        return { status: 'not-found' };
       }
       logger.warn(
         { crateName, status: response.status },
         'crates.io request failed',
       );
-      return null;
+      return { status: 'error' };
     }
 
     const data = (await response.json()) as CratesIoResponse;
@@ -74,13 +74,13 @@ export async function queryCargoRegistry(
 
     if (!crateData) {
       logger.warn({ crateName }, 'No crate data in crates.io response');
-      return null;
+      return { status: 'error' };
     }
 
     const latestVersion = crateData.max_stable_version ?? crateData.newest_version;
     if (!latestVersion) {
       logger.warn({ crateName }, 'No version found in crates.io response');
-      return null;
+      return { status: 'error' };
     }
 
     // Find the latest version's license
@@ -97,10 +97,10 @@ export async function queryCargoRegistry(
     };
 
     cache.set('cargo', crateName, meta);
-    return meta;
+    return { status: 'found', meta };
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.error({ crateName, error: detail }, 'crates.io query failed');
-    return null;
+    return { status: 'error' };
   }
 }

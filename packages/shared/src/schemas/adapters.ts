@@ -38,6 +38,7 @@ export const minimalDependencySchema = z.object({
   version: z.string().min(1).max(256),
   constraint: z.string().max(512),
   scope: dependencyScopeSchema,
+  local: z.boolean().optional(),
 });
 
 /** Keys that are stripped from metadata to prevent prototype pollution. */

@@ -140,8 +140,8 @@ describe('parseJsManifests', () => {
     });
   });
 
-  describe('workspace filtering', () => {
-    it('filters out workspace:* references', async () => {
+  describe('local/workspace protocol deps', () => {
+    it('includes workspace:* references as local deps', async () => {
       mockFiles({
         'package.json': JSON.stringify({
           name: 'app',
@@ -155,8 +155,37 @@ describe('parseJsManifests', () => {
 
       const result = await parseJsManifests('/project', '.');
 
-      expect(result.dependencies).toHaveLength(1);
-      expect(result.dependencies[0]?.name).toBe('react');
+      expect(result.dependencies).toHaveLength(3);
+
+      const react = result.dependencies.find((d) => d.name === 'react');
+      expect(react?.local).toBeFalsy();
+
+      const shared = result.dependencies.find((d) => d.name === '@myorg/shared');
+      expect(shared?.local).toBe(true);
+      // No lock entry → clean '*' version rather than 'workspace:*'.
+      expect(shared?.version).toBe('*');
+      expect(shared?.constraint).toBe('workspace:*');
+    });
+
+    it('marks file:/link:/portal: path protocols as local', async () => {
+      mockFiles({
+        'package.json': JSON.stringify({
+          name: 'app',
+          dependencies: {
+            'local-file': 'file:../local-file',
+            'local-link': 'link:../local-link',
+            'local-portal': 'portal:../local-portal',
+          },
+        }),
+      });
+
+      const result = await parseJsManifests('/project', '.');
+
+      expect(result.dependencies).toHaveLength(3);
+      for (const dep of result.dependencies) {
+        expect(dep.local).toBe(true);
+        expect(dep.version).toBe('*');
+      }
     });
   });
 

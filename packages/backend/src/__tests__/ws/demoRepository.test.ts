@@ -10,6 +10,7 @@ vi.mock('execa', () => ({
 import { execa } from 'execa';
 import {
   DemoRepositoryError,
+  checkGithubRepositoryAccess,
   importDemoRepository,
   importPublicGithubRepository,
   normalizePublicGithubRepositoryUrl,
@@ -17,6 +18,28 @@ import {
 } from '../../ws/demoRepository.js';
 
 const mockedExeca = vi.mocked(execa);
+
+/** Build a minimal fetch Response stub for the GitHub repo-access probe. */
+function githubResponse(
+  status: number,
+  options: { body?: unknown; remaining?: string } = {},
+): Response {
+  const headers = new Headers();
+  if (options.remaining !== undefined) headers.set('x-ratelimit-remaining', options.remaining);
+  return {
+    status,
+    headers,
+    json: async () => options.body ?? {},
+  } as unknown as Response;
+}
+
+/** Default the probe to "public" so import tests reach the clone path. */
+function stubGithubPublic(): void {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockResolvedValue(githubResponse(200, { body: { private: false } })),
+  );
+}
 
 function repo(overrides: Record<string, unknown> = {}) {
   return {
@@ -32,10 +55,12 @@ let cacheDir = '';
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  stubGithubPublic();
   cacheDir = await mkdtemp(join(tmpdir(), 'deckgraph-demo-test-'));
 });
 
 afterEach(async () => {
+  vi.unstubAllGlobals();
   if (cacheDir) {
     await rm(cacheDir, { recursive: true, force: true });
   }
@@ -301,5 +326,100 @@ describe('importPublicGithubRepository', () => {
     ).rejects.toThrow(DemoRepositoryError);
 
     expect(mockedExeca).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('reports a not-found/private repository without attempting a clone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(404)));
+
+    await expect(
+      importPublicGithubRepository({
+        url: 'https://github.com/example/missing',
+        cacheDir,
+        existingRepositories: [],
+      }),
+    ).rejects.toMatchObject({ kind: 'not_found' });
+
+    expect(mockedExeca).not.toHaveBeenCalled();
+  });
+
+  it('reports a private repository when GitHub confirms it with a token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(githubResponse(200, { body: { private: true } })),
+    );
+
+    await expect(
+      importPublicGithubRepository({
+        url: 'https://github.com/example/secret',
+        cacheDir,
+        existingRepositories: [],
+      }),
+    ).rejects.toMatchObject({ kind: 'private' });
+
+    expect(mockedExeca).not.toHaveBeenCalled();
+  });
+
+  it('reports a rate-limited probe without attempting a clone', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(403, { remaining: '0' })));
+
+    await expect(
+      importPublicGithubRepository({
+        url: 'https://github.com/example/limited',
+        cacheDir,
+        existingRepositories: [],
+      }),
+    ).rejects.toMatchObject({ kind: 'rate_limited' });
+
+    expect(mockedExeca).not.toHaveBeenCalled();
+  });
+
+  it('falls back to cloning when the probe is unreachable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+    mockedExeca.mockImplementation(async (_cmd, args) => {
+      const targetPath = Array.isArray(args) ? args.at(-1) : undefined;
+      if (typeof targetPath === 'string') await mkdir(targetPath, { recursive: true });
+      return { exitCode: 0, timedOut: false, stdout: '', stderr: '' } as never;
+    });
+
+    const result = await importPublicGithubRepository({
+      url: 'https://github.com/example/reachable-by-clone',
+      cacheDir,
+      existingRepositories: [],
+    });
+
+    expect(result.repository.id).toBe('custom-example-reachable-by-clone');
+    expect(mockedExeca).toHaveBeenCalled();
+  });
+});
+
+describe('checkGithubRepositoryAccess', () => {
+  it('classifies HTTP statuses and the private flag', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(200, { body: { private: false } })));
+    expect(await checkGithubRepositoryAccess('a', 'b')).toBe('public');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(200, { body: { private: true } })));
+    expect(await checkGithubRepositoryAccess('a', 'b')).toBe('private');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(404)));
+    expect(await checkGithubRepositoryAccess('a', 'b')).toBe('not_found');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(403, { remaining: '0' })));
+    expect(await checkGithubRepositoryAccess('a', 'b')).toBe('rate_limited');
+
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(githubResponse(403, { remaining: '12' })));
+    expect(await checkGithubRepositoryAccess('a', 'b')).toBe('unreachable');
+
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('boom')));
+    expect(await checkGithubRepositoryAccess('a', 'b')).toBe('unreachable');
+  });
+
+  it('rejects unsafe owner/repo segments without making a request', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    expect(await checkGithubRepositoryAccess('owner/../etc', 'repo')).toBe('unreachable');
+    expect(await checkGithubRepositoryAccess('owner', 'repo?x=1')).toBe('unreachable');
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

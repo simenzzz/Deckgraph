@@ -64,12 +64,12 @@ describe('queryMavenRegistry', () => {
 
     const result = await queryMavenRegistry('com.google.guava:guava', cache, limiter);
 
-    expect(result).not.toBeNull();
-    expect(result!.latestVersion).toBe('33.1.0-jre');
-    expect(result!.homepage).toContain('com.google.guava');
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.latestVersion).toBe('33.1.0-jre');
+    expect(result.meta.homepage).toContain('com.google.guava');
   });
 
-  it('returns null for no results', async () => {
+  it('returns not-found for no results', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
         JSON.stringify({
@@ -80,12 +80,12 @@ describe('queryMavenRegistry', () => {
     );
 
     const result = await queryMavenRegistry('com.nonexistent:artifact', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
-  it('returns null for unparseable coordinate', async () => {
+  it('returns not-found for unparseable coordinate', async () => {
     const result = await queryMavenRegistry('single-segment', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
   it('caches results', async () => {

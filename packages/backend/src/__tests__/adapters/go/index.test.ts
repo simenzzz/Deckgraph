@@ -29,10 +29,10 @@ describe('createGoAdapter', () => {
     expect(result[0]!.isThirdParty).toBe(true);
   });
 
-  it('returns null for queryRegistry', async () => {
+  it('returns error for queryRegistry without a cache', async () => {
     const adapter = createGoAdapter();
     const result = await adapter.queryRegistry('github.com/gin-gonic/gin');
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'error' });
   });
 
   it('creates a new adapter instance each call', () => {

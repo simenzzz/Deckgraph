@@ -5,7 +5,7 @@
  * to fetch package metadata (latest version, license, deprecation).
  */
 
-import type { RegistryMeta } from '@deckgraph/shared';
+import type { RegistryMeta, RegistryQueryResult } from '@deckgraph/shared';
 import type { RegistryCache } from '../registryCache.js';
 import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { createLogger } from '../../logger.js';
@@ -33,15 +33,15 @@ interface NpmAbbreviatedMeta {
  * @param packageName - npm package name (e.g. "express", "@babel/core")
  * @param cache - Registry metadata cache
  * @param rateLimiter - Rate limiter for npm requests
- * @returns Registry metadata, or null if not found
+ * @returns Discriminated query result (found / not-found / error)
  */
 export async function queryNpmRegistry(
   packageName: string,
   cache: RegistryCache,
   rateLimiter: RegistryRateLimiter,
-): Promise<RegistryMeta | null> {
+): Promise<RegistryQueryResult> {
   const cached = cache.get('npm', packageName);
-  if (cached) return cached;
+  if (cached) return { status: 'found', meta: cached };
 
   await rateLimiter.acquire('npm');
 
@@ -58,13 +58,13 @@ export async function queryNpmRegistry(
     if (!response.ok) {
       if (response.status === 404) {
         logger.debug({ packageName }, 'Package not found on npm');
-        return null;
+        return { status: 'not-found' };
       }
       logger.warn(
         { packageName, status: response.status },
         'npm registry request failed',
       );
-      return null;
+      return { status: 'error' };
     }
 
     const data = (await response.json()) as NpmAbbreviatedMeta;
@@ -72,7 +72,7 @@ export async function queryNpmRegistry(
 
     if (!latestVersion) {
       logger.warn({ packageName }, 'No latest version found');
-      return null;
+      return { status: 'error' };
     }
 
     const latestTime = data.time?.[latestVersion] ?? null;
@@ -88,10 +88,10 @@ export async function queryNpmRegistry(
     };
 
     cache.set('npm', packageName, meta);
-    return meta;
+    return { status: 'found', meta };
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.error({ packageName, error: detail }, 'npm registry query failed');
-    return null;
+    return { status: 'error' };
   }
 }

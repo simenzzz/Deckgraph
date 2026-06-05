@@ -108,6 +108,22 @@ describe('useDependencyDetail', () => {
     );
   });
 
+  it('does not auto-trigger enrichment for a local dependency', () => {
+    const mockClient = createMockWsClient();
+    const localDep: Dependency = { ...unenrichedDep, name: 'tideway-ingest', ecosystem: 'cargo', local: true };
+    const localProject: Project = {
+      ...mockProject,
+      modules: [{ ...mockModule, ecosystem: 'cargo', dependencies: [localDep] }],
+    };
+    useProjectStore.getState().setProject(localProject);
+    useDetailStore.getState().selectDep({ name: 'tideway-ingest', ecosystem: 'cargo' });
+
+    renderHook(() => useDependencyDetail(mockClient as unknown as WsClient));
+
+    expect(mockClient.send).not.toHaveBeenCalled();
+    expect(useDetailStore.getState().isEnriching).toBe(false);
+  });
+
   it('requestEnrichment sends WS message', () => {
     const mockClient = createMockWsClient();
     useProjectStore.getState().setProject(mockProject);

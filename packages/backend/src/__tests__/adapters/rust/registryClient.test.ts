@@ -44,19 +44,19 @@ describe('queryCargoRegistry', () => {
 
     const result = await queryCargoRegistry('serde', cache, limiter);
 
-    expect(result).not.toBeNull();
-    expect(result!.latestVersion).toBe('1.0.197');
-    expect(result!.license).toBe('MIT OR Apache-2.0');
-    expect(result!.downloads).toBe(500_000_000);
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.latestVersion).toBe('1.0.197');
+    expect(result.meta.license).toBe('MIT OR Apache-2.0');
+    expect(result.meta.downloads).toBe(500_000_000);
   });
 
-  it('returns null for 404', async () => {
+  it('returns not-found for 404', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('Not Found', { status: 404 }),
     );
 
     const result = await queryCargoRegistry('nonexistent-crate', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
   it('includes User-Agent header', async () => {
@@ -86,7 +86,8 @@ describe('queryCargoRegistry', () => {
     );
 
     const result = await queryCargoRegistry('beta-crate', cache, limiter);
-    expect(result!.latestVersion).toBe('2.0.0-beta.1');
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.latestVersion).toBe('2.0.0-beta.1');
   });
 
   it('caches results', async () => {

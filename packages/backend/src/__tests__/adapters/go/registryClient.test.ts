@@ -32,27 +32,27 @@ describe('queryGoRegistry', () => {
 
     const result = await queryGoRegistry('github.com/gin-gonic/gin', cache, limiter);
 
-    expect(result).not.toBeNull();
-    expect(result!.latestVersion).toBe('v1.9.7');
-    expect(result!.homepage).toBe('https://pkg.go.dev/github.com/gin-gonic/gin');
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.latestVersion).toBe('v1.9.7');
+    expect(result.meta.homepage).toBe('https://pkg.go.dev/github.com/gin-gonic/gin');
   });
 
-  it('returns null for 404', async () => {
+  it('returns not-found for 404', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('Not Found', { status: 404 }),
     );
 
     const result = await queryGoRegistry('github.com/nonexistent/mod', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
-  it('returns null for 410 (gone)', async () => {
+  it('returns not-found for 410 (gone)', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('Gone', { status: 410 }),
     );
 
     const result = await queryGoRegistry('github.com/removed/mod', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
   it('caches results', async () => {

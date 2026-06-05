@@ -124,15 +124,17 @@ function extractDependencies(
     if (!section) continue;
 
     for (const [name, constraint] of Object.entries(section)) {
-      if (isWorkspaceRef(constraint)) continue;
-
-      const version = resolvedVersions?.versions.get(name) ?? constraint;
+      const local = isLocalProtocolRef(constraint);
+      // Local deps have no registry version; fall back to '*' rather than an
+      // ugly raw spec like "workspace:*" when no lock entry resolves it.
+      const version = resolvedVersions?.versions.get(name) ?? (local ? '*' : constraint);
 
       deps.push({
         name,
         version,
         constraint,
         scope,
+        ...(local ? { local: true } : {}),
       });
     }
   }
@@ -141,10 +143,17 @@ function extractDependencies(
 }
 
 /**
- * Check if a version constraint is a workspace reference.
+ * Protocol prefixes that mark a dependency as local/workspace rather than a
+ * registry package: pnpm/yarn `workspace:`, and the `file:`/`link:`/`portal:`
+ * local path protocols. Such deps aren't published to npm.
  */
-function isWorkspaceRef(constraint: string): boolean {
-  return constraint.startsWith('workspace:');
+const LOCAL_PROTOCOL_PREFIXES = ['workspace:', 'file:', 'link:', 'portal:'] as const;
+
+/**
+ * Check if a version constraint points at a local/workspace package.
+ */
+function isLocalProtocolRef(constraint: string): boolean {
+  return LOCAL_PROTOCOL_PREFIXES.some((prefix) => constraint.startsWith(prefix));
 }
 
 // Lock File Reading

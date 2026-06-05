@@ -5,7 +5,7 @@
  * and crates.io registry queries.
  */
 
-import type { EcosystemAdapter, ManifestResult, ParsedImport, RegistryMeta } from '@deckgraph/shared';
+import type { EcosystemAdapter, ManifestResult, ParsedImport, RegistryQueryResult } from '@deckgraph/shared';
 import type { RegistryCache } from '../registryCache.js';
 import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { parseRustManifests } from './manifestParser.js';
@@ -34,8 +34,8 @@ export function createRustAdapter(
       return analyzeRustImports(filePath, source);
     },
 
-    async queryRegistry(packageName: string): Promise<RegistryMeta | null> {
-      if (!cache || !rateLimiter) return null;
+    async queryRegistry(packageName: string): Promise<RegistryQueryResult> {
+      if (!cache || !rateLimiter) return { status: 'error' };
       return queryCargoRegistry(packageName, cache, rateLimiter);
     },
   };

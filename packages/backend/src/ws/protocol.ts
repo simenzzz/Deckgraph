@@ -36,7 +36,12 @@ import { discoverRoots } from '../discovery/workspaceDiscovery.js';
 import { runHooksForEvent } from '../hooks/notifier.js';
 import { createLogger } from '../logger.js';
 import { ErrorCatalog, createCatalogError, mapError } from '../errors/index.js';
-import { importDemoRepository, importPublicGithubRepository } from './demoRepository.js';
+import {
+  DemoRepositoryError,
+  importDemoRepository,
+  importPublicGithubRepository,
+  type DemoRepositoryErrorKind,
+} from './demoRepository.js';
 import type { ClientConnection, ProgressEmitter, ServerState } from './types.js';
 
 const logger = createLogger('protocol');
@@ -352,6 +357,27 @@ async function handleImportDemoRepo(
  * Handle import_public_github_repo: clone a user-provided public GitHub repository,
  * scan it immediately, and add it to this connection's demo repository list.
  */
+/**
+ * Translate a classified import failure into the matching catalog error.
+ *
+ * `validation`-kind messages are contractually user-facing — they are authored,
+ * plain-language strings (e.g. URL-shape guidance) surfaced verbatim. Never tag
+ * an error that carries internal/raw detail (git stderr, paths) as `validation`;
+ * those belong to `clone_failed`/`unavailable`, which map to a generic entry so
+ * git internals never reach the UI.
+ */
+function mapImportError(error: DemoRepositoryError, requestId: string): ServerMessage {
+  const byKind: Record<DemoRepositoryErrorKind, ServerMessage> = {
+    validation: createCatalogError(ErrorCatalog.VALIDATION_FAILED, requestId, error.message),
+    not_found: createCatalogError(ErrorCatalog.DEMO_REPOSITORY_NOT_FOUND, requestId),
+    private: createCatalogError(ErrorCatalog.DEMO_REPOSITORY_PRIVATE, requestId),
+    rate_limited: createCatalogError(ErrorCatalog.DEMO_REPOSITORY_RATE_LIMITED, requestId),
+    clone_failed: createCatalogError(ErrorCatalog.DEMO_IMPORT_FAILED, requestId),
+    unavailable: createCatalogError(ErrorCatalog.DEMO_IMPORT_FAILED, requestId),
+  };
+  return byKind[error.kind];
+}
+
 async function handleImportPublicGithubRepo(
   requestId: string,
   url: string,
@@ -419,7 +445,10 @@ async function handleImportPublicGithubRepo(
     }
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.warn({ url, error: detail }, 'Public GitHub repository import failed');
-    return createCatalogError(ErrorCatalog.DEMO_REPOSITORY_UNAVAILABLE, requestId);
+    if (error instanceof DemoRepositoryError) {
+      return mapImportError(error, requestId);
+    }
+    return createCatalogError(ErrorCatalog.DEMO_IMPORT_FAILED, requestId);
   } finally {
     if (connection.demoImportRequestId === requestId) {
       connection.demoImportRequestId = null;
@@ -466,10 +495,10 @@ async function resolveScanScope(
   try {
     scanRootStats = await stat(absoluteScanRoot);
   } catch {
-    throw new ScanScopeError(`scanRoot does not exist: ${scanRoot}`);
+    throw new ScanScopeError(`The scan folder "${scanRoot}" wasn't found in the repository`);
   }
   if (!scanRootStats.isDirectory()) {
-    throw new ScanScopeError(`scanRoot is not a directory: ${scanRoot}`);
+    throw new ScanScopeError(`The scan path "${scanRoot}" is a file, not a folder`);
   }
 
   return { scanRoot, excludePaths };
@@ -495,18 +524,18 @@ function normalizeScopePath(
     return DEFAULT_SCAN_ROOT;
   }
   if (!options.allowDot && (trimmed === '.' || normalized === '')) {
-    throw new ScanScopeError(`${options.fieldName} must name a repository-relative path`);
+    throw new ScanScopeError(`${options.fieldName} must be a path inside the repository (for example: packages/app)`);
   }
   if (trimmed.includes('\\') || isAbsolute(trimmed)) {
-    throw new ScanScopeError(`${options.fieldName} must be repository-relative`);
+    throw new ScanScopeError(`${options.fieldName} must be a path inside the repository (for example: packages/app)`);
   }
   if (!options.allowGlob && /[*?[\]{}]/.test(normalized)) {
-    throw new ScanScopeError(`${options.fieldName} cannot contain glob characters`);
+    throw new ScanScopeError(`${options.fieldName} can't contain wildcard characters like * or ?`);
   }
 
   const segments = normalized.split('/');
   if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
-    throw new ScanScopeError(`${options.fieldName} contains an invalid path segment`);
+    throw new ScanScopeError(`${options.fieldName} must stay inside the repository`);
   }
 
   return normalized;
@@ -757,13 +786,37 @@ async function handleEnrichDependency(
     return createCatalogError(ErrorCatalog.NO_ADAPTER, requestId, ecosystem);
   }
 
+  // Locate the dependency before any network call so we can short-circuit
+  // local/workspace packages — they are not published to a public registry,
+  // so there is nothing to fetch.
+  const existing = scanResult.project.modules
+    .flatMap((mod) => mod.dependencies)
+    .find((d) => d.name === packageName && d.ecosystem === ecosystem);
+
+  if (!existing) {
+    return createCatalogError(ErrorCatalog.DEPENDENCY_NOT_IN_PROJECT, requestId, packageName);
+  }
+
+  if (existing.local) {
+    // Defense in depth: the web UI already renders a dedicated local-package
+    // state and never sends this request for a local dep. This guard protects
+    // other callers (e.g. the CLI / VS Code extension, or the manual button).
+    return createCatalogError(ErrorCatalog.LOCAL_PACKAGE_NO_REGISTRY, requestId, packageName);
+  }
+
   emitProgress(requestId, `Querying ${ecosystem} registry for ${packageName}...`, 0);
 
-  const registryMeta = await adapter.queryRegistry(packageName);
+  const result = await adapter.queryRegistry(packageName);
 
-  if (!registryMeta) {
+  if (result.status === 'not-found') {
     return createCatalogError(ErrorCatalog.PACKAGE_NOT_FOUND, requestId, packageName);
   }
+
+  if (result.status === 'error') {
+    return createCatalogError(ErrorCatalog.REGISTRY_UNREACHABLE, requestId);
+  }
+
+  const registryMeta = result.meta;
 
   // Find the dependency in the project and enrich it immutably
   let enrichedDep = null;

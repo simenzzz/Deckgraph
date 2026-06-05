@@ -12,7 +12,7 @@ import { z } from 'zod';
 import type { ManifestResult, MinimalDependency, DependencyScope } from '@deckgraph/shared';
 import { parseManifestResult } from '@deckgraph/shared';
 import { createLogger } from '../../logger.js';
-import { readFileSafe, uniqueDirs } from '../utils.js';
+import { hasStringPathField, readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('rust-manifest-parser');
 
@@ -153,12 +153,14 @@ function extractDependencies(
     for (const [name, value] of Object.entries(section)) {
       const constraint = extractConstraint(value);
       const version = resolvedVersions?.versions.get(name) ?? constraint;
+      const local = hasStringPathField(value);
 
       deps.push({
         name,
         version,
         constraint,
         scope,
+        ...(local ? { local: true } : {}),
       });
     }
   }

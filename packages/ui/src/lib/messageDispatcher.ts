@@ -10,6 +10,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useViewStore } from '@/stores/viewStore';
 import { useWorkspaceStore } from '@/stores/workspaceStore';
 import { useNotificationStore } from '@/stores/notificationStore';
+import { useHealthPrereqStore } from '@/stores/healthPrereqStore';
 import { resetScanSession } from './sessionReset';
 
 /**
@@ -36,10 +37,28 @@ export function dispatchServerMessage(message: ServerMessage): void {
       break;
 
     case 'progress':
+      if (useHealthPrereqStore.getState().active?.requestId === message.requestId) {
+        useHealthPrereqStore.getState().setProgress(message.requestId, message.message);
+        break;
+      }
       useProjectStore.getState().setProgress(message);
       break;
 
-    case 'error':
+    case 'error': {
+      // Enrichment errors are surfaced inside the dependency detail panel
+      // (with a retry), not as a global toast that vanishes and leaves the
+      // panel looking un-fetched.
+      const detail = useDetailStore.getState();
+      if (detail.enrichmentRequestId === message.requestId) {
+        detail.setEnrichError({ message: message.message, suggestion: message.suggestion });
+        break;
+      }
+
+      if (useHealthPrereqStore.getState().active?.requestId === message.requestId) {
+        useHealthPrereqStore.getState().failRequest(message.requestId, message.message);
+        break;
+      }
+
       useConnectionStore.getState().setError(message.message, message.suggestion);
       // H4: Clear loading state so UI doesn't show infinite spinner
       useViewStore.getState().setLoading(false);
@@ -49,6 +68,7 @@ export function dispatchServerMessage(message: ServerMessage): void {
       useDetailStore.getState().completeEnriching(message.requestId);
       useViewStore.getState().completeModuleAnalysis(message.requestId);
       break;
+    }
 
     case 'ready':
       useConnectionStore.getState().setReady(
@@ -65,11 +85,13 @@ export function dispatchServerMessage(message: ServerMessage): void {
     case 'module_updated':
       useProjectStore.getState().updateModule(message.module);
       useViewStore.getState().completeModuleAnalysis(message.requestId);
+      useHealthPrereqStore.getState().completeRequest(message.requestId);
       break;
 
     case 'dependency_enriched':
       useProjectStore.getState().updateDependency(message.dependency);
       useDetailStore.getState().completeEnriching(message.requestId);
+      useHealthPrereqStore.getState().completeRequest(message.requestId);
       break;
 
     case 'file_change_detected':

@@ -25,7 +25,7 @@ interface DependencyDetailProps {
 
 export function DependencyDetail({ wsClient }: DependencyDetailProps) {
   const closeDep = useDetailStore((s) => s.closeDep);
-  const { dependency, modulePath, analysisState, outdatedSeverity, isEnriching, requestEnrichment } =
+  const { dependency, modulePath, analysisState, outdatedSeverity, isEnriching, enrichError, requestEnrichment } =
     useDependencyDetail(wsClient);
   const updateAction = usePackageUpdate(dependency, modulePath, wsClient);
 
@@ -60,6 +60,7 @@ export function DependencyDetail({ wsClient }: DependencyDetailProps) {
             dependency={dependency}
             outdatedSeverity={outdatedSeverity}
             isEnriching={isEnriching}
+            enrichError={enrichError}
             onEnrich={requestEnrichment}
           />
           {modulePath && (
@@ -84,7 +85,7 @@ export function DependencyDetail({ wsClient }: DependencyDetailProps) {
 
         <section>
           <h4 className="mb-2 text-sm font-medium text-muted-foreground">Transitive Dependencies</h4>
-          <TransitiveDeps transitiveDeps={dependency.transitiveDeps} />
+          <TransitiveDeps transitiveDeps={dependency.transitiveDeps} local={dependency.local} />
         </section>
       </div>
     </div>

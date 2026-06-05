@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { HealthReport } from '@/components/health/HealthReport';
 import { useProjectStore } from '@/stores/projectStore';
 import { useFilterStore } from '@/stores/filterStore';
+import { useConnectionStore } from '@/stores/connectionStore';
+import { useDetailStore } from '@/stores/detailStore';
+import { useHealthPrereqStore } from '@/stores/healthPrereqStore';
+import { useViewStore } from '@/stores/viewStore';
 import type { Project } from '@deckgraph/shared';
 
 const emptyProject: Project = {
@@ -17,6 +21,10 @@ describe('HealthReport', () => {
   beforeEach(() => {
     useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
     useFilterStore.setState({ ecosystems: [], scopes: [], search: '', showCrossEdges: false, concern: null });
+    useConnectionStore.setState({ status: 'connected' });
+    useDetailStore.setState({ selectedDep: null, isEnriching: false, enrichmentRequestId: null, enrichError: null });
+    useHealthPrereqStore.getState().reset();
+    useViewStore.setState({ currentView: 'overview', selectedModulePath: null });
   });
 
   it('renders health report container', () => {
@@ -37,6 +45,42 @@ describe('HealthReport', () => {
     render(<HealthReport wsClient={null} />);
     // Default tab is outdated, which shows "no registry data" message
     expect(screen.getByTestId('outdated-no-data')).toBeInTheDocument();
+  });
+
+  it('opens the first registry target in Module Explorer from the empty state', () => {
+    useProjectStore.getState().setProject({
+      ...emptyProject,
+      modules: [
+        {
+          path: 'pkg/a',
+          name: 'a',
+          ecosystem: 'npm',
+          manifests: ['package.json'],
+          analysisState: 'manifest-only',
+          dependencies: [
+            {
+              name: 'react',
+              ecosystem: 'npm',
+              version: '18.0.0',
+              constraint: '^18',
+              scope: 'runtime',
+              source: 'manifest',
+              concerns: [],
+              usedInFiles: null,
+              transitiveDeps: null,
+              registryMeta: null,
+            },
+          ],
+        },
+      ],
+    });
+
+    render(<HealthReport wsClient={null} />);
+    fireEvent.click(screen.getByTestId('outdated-no-data-open-explorer'));
+
+    expect(useViewStore.getState().currentView).toBe('explorer');
+    expect(useViewStore.getState().selectedModulePath).toBe('pkg/a');
+    expect(useDetailStore.getState().selectedDep).toEqual({ name: 'react', ecosystem: 'npm' });
   });
 
   it('shows count badge when there are outdated deps', () => {

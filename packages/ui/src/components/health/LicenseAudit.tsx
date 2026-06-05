@@ -8,18 +8,42 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertTriangle } from 'lucide-react';
+import { HealthPrereqEmptyState } from './HealthPrereqEmptyState';
+import type { HealthPrereqStore } from '@/stores/healthPrereqStore';
 
 interface LicenseAuditProps {
   readonly licenses: readonly LicenseEntry[];
   readonly hasRegistryData: boolean;
+  readonly registryTargetCount?: number;
+  readonly registryStatus?: HealthPrereqStore | null;
+  readonly actionDisabled?: boolean;
+  readonly onOpenRegistryTarget?: () => void;
+  readonly onFetchRegistry?: () => void;
 }
 
-export function LicenseAudit({ licenses, hasRegistryData }: LicenseAuditProps) {
+export function LicenseAudit({
+  licenses,
+  hasRegistryData,
+  registryTargetCount = 0,
+  registryStatus = null,
+  actionDisabled = false,
+  onOpenRegistryTarget = () => {},
+  onFetchRegistry = () => {},
+}: LicenseAuditProps) {
   if (!hasRegistryData) {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground" data-testid="license-no-data">
-        No registry data available yet. Enrich dependencies to see license information.
-      </div>
+      <HealthPrereqEmptyState
+        testId="license-no-data"
+        title="License data has not been fetched"
+        description="Open a dependency in Module Explorer or fetch registry info for the visible dependencies."
+        explorerLabel="Open in Module Explorer"
+        actionLabel="Fetch registry"
+        targetCount={registryTargetCount}
+        status={registryStatus}
+        actionDisabled={actionDisabled}
+        onOpenExplorer={onOpenRegistryTarget}
+        onRunAction={onFetchRegistry}
+      />
     );
   }
 

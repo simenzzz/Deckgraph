@@ -5,11 +5,13 @@
  */
 
 import { useHealthReport } from '@/hooks/useHealthReport';
+import { useHealthPrerequisiteActions } from '@/hooks/useHealthPrerequisiteActions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { OutdatedReport } from './OutdatedReport';
 import { UnusedReport } from './UnusedReport';
 import { LicenseAudit } from './LicenseAudit';
 import { BatchActions } from './BatchActions';
+import { useConnectionStore } from '@/stores';
 import type { WsClient } from '@/lib/wsClient';
 
 interface HealthReportProps {
@@ -19,6 +21,9 @@ interface HealthReportProps {
 export function HealthReport({ wsClient }: HealthReportProps) {
   const { outdatedDeps, unusedDeps, licenseDistribution, hasImportAnalysis, hasRegistryData } =
     useHealthReport();
+  const connectionStatus = useConnectionStore((s) => s.status);
+  const prerequisiteActions = useHealthPrerequisiteActions(wsClient);
+  const actionDisabled = connectionStatus !== 'connected';
 
   return (
     <div className="space-y-4" data-testid="health-report">
@@ -44,15 +49,39 @@ export function HealthReport({ wsClient }: HealthReportProps) {
         </TabsList>
 
         <TabsContent value="outdated">
-          <OutdatedReport deps={outdatedDeps} hasRegistryData={hasRegistryData} />
+          <OutdatedReport
+            deps={outdatedDeps}
+            hasRegistryData={hasRegistryData}
+            registryTargetCount={prerequisiteActions.registryTargets.length}
+            registryStatus={prerequisiteActions.registryStatus}
+            actionDisabled={actionDisabled}
+            onOpenRegistryTarget={prerequisiteActions.openRegistryTarget}
+            onFetchRegistry={prerequisiteActions.fetchVisibleRegistry}
+          />
         </TabsContent>
 
         <TabsContent value="unused">
-          <UnusedReport deps={unusedDeps} hasImportAnalysis={hasImportAnalysis} />
+          <UnusedReport
+            deps={unusedDeps}
+            hasImportAnalysis={hasImportAnalysis}
+            importTargetCount={prerequisiteActions.importTargets.length}
+            importStatus={prerequisiteActions.importStatus}
+            actionDisabled={actionDisabled}
+            onOpenImportTarget={prerequisiteActions.openImportTarget}
+            onAnalyzeImports={prerequisiteActions.analyzeVisibleImports}
+          />
         </TabsContent>
 
         <TabsContent value="licenses">
-          <LicenseAudit licenses={licenseDistribution} hasRegistryData={hasRegistryData} />
+          <LicenseAudit
+            licenses={licenseDistribution}
+            hasRegistryData={hasRegistryData}
+            registryTargetCount={prerequisiteActions.registryTargets.length}
+            registryStatus={prerequisiteActions.registryStatus}
+            actionDisabled={actionDisabled}
+            onOpenRegistryTarget={prerequisiteActions.openRegistryTarget}
+            onFetchRegistry={prerequisiteActions.fetchVisibleRegistry}
+          />
         </TabsContent>
       </Tabs>
     </div>

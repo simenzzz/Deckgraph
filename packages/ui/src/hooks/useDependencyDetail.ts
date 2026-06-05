@@ -9,6 +9,7 @@ import { useCallback, useMemo, useEffect, useRef } from 'react';
 import type { AnalysisState, Dependency, OutdatedSeverity } from '@deckgraph/shared';
 import { classifyOutdated } from '@deckgraph/shared';
 import { useDetailStore } from '@/stores/detailStore';
+import type { EnrichError } from '@/stores/detailStore';
 import { useProjectStore } from '@/stores/projectStore';
 import type { WsClient } from '@/lib/wsClient';
 import { createRequestId } from '@/lib/wsClient';
@@ -19,12 +20,14 @@ export interface DependencyDetailData {
   readonly analysisState: AnalysisState | null;
   readonly outdatedSeverity: OutdatedSeverity | null;
   readonly isEnriching: boolean;
+  readonly enrichError: EnrichError | null;
   readonly requestEnrichment: () => void;
 }
 
 export function useDependencyDetail(wsClient: WsClient | null): DependencyDetailData {
   const selectedDep = useDetailStore((s) => s.selectedDep);
   const isEnriching = useDetailStore((s) => s.isEnriching);
+  const enrichError = useDetailStore((s) => s.enrichError);
   const project = useProjectStore((s) => s.project);
   const enrichedRef = useRef<string | null>(null);
 
@@ -73,6 +76,9 @@ export function useDependencyDetail(wsClient: WsClient | null): DependencyDetail
 
     if (!resolved.dependency || isEnriching) return;
     if (resolved.dependency.registryMeta !== null) return;
+    // Local/workspace packages aren't on a public registry — don't fire a
+    // doomed request; the panel shows a dedicated local-package state instead.
+    if (resolved.dependency.local) return;
 
     const key = `${selectedDep.ecosystem}:${selectedDep.name}`;
     if (enrichedRef.current === key) return;
@@ -87,6 +93,7 @@ export function useDependencyDetail(wsClient: WsClient | null): DependencyDetail
     analysisState: resolved.analysisState,
     outdatedSeverity,
     isEnriching,
+    enrichError,
     requestEnrichment,
   };
 }

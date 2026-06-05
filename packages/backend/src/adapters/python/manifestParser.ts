@@ -15,7 +15,7 @@ import { z } from 'zod';
 import type { ManifestResult, MinimalDependency, DependencyScope } from '@deckgraph/shared';
 import { parseManifestResult } from '@deckgraph/shared';
 import { createLogger } from '../../logger.js';
-import { readFileSafe, uniqueDirs } from '../utils.js';
+import { hasStringPathField, readFileSafe, uniqueDirs } from '../utils.js';
 
 const logger = createLogger('python-manifest-parser');
 
@@ -268,7 +268,7 @@ function extractPoetryDeps(
     if (name.toLowerCase() === 'python') continue;
     const constraint = extractPoetryConstraint(value);
     const version = resolvedVersions?.versions.get(normalizePypiName(name)) ?? constraint;
-    deps.push({ name, version, constraint, scope: 'runtime' });
+    deps.push({ name, version, constraint, scope: 'runtime', ...(hasStringPathField(value) ? { local: true } : {}) });
   }
 
   // tool.poetry.group.*.dependencies → scope based on group name
@@ -277,7 +277,7 @@ function extractPoetryDeps(
     for (const [name, value] of Object.entries(group.dependencies ?? {})) {
       const constraint = extractPoetryConstraint(value);
       const version = resolvedVersions?.versions.get(normalizePypiName(name)) ?? constraint;
-      deps.push({ name, version, constraint, scope });
+      deps.push({ name, version, constraint, scope, ...(hasStringPathField(value) ? { local: true } : {}) });
     }
   }
 
@@ -368,14 +368,14 @@ async function parsePipfile(
   for (const [name, value] of Object.entries(pipfile.packages ?? {})) {
     const constraint = extractPipfileConstraint(value);
     const version = resolvedVersions?.versions.get(normalizePypiName(name)) ?? constraint;
-    dependencies.push({ name, version, constraint, scope: 'runtime' });
+    dependencies.push({ name, version, constraint, scope: 'runtime', ...(hasStringPathField(value) ? { local: true } : {}) });
   }
 
   // [dev-packages] → dev
   for (const [name, value] of Object.entries(pipfile['dev-packages'] ?? {})) {
     const constraint = extractPipfileConstraint(value);
     const version = resolvedVersions?.versions.get(normalizePypiName(name)) ?? constraint;
-    dependencies.push({ name, version, constraint, scope: 'dev' });
+    dependencies.push({ name, version, constraint, scope: 'dev', ...(hasStringPathField(value) ? { local: true } : {}) });
   }
 
   const result: ManifestResult = {

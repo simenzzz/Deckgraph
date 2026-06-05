@@ -42,9 +42,26 @@ export interface EcosystemAdapter {
   /**
    * Phase 3: Query the ecosystem's package registry for metadata.
    * Network-bound — called on-demand when user opens dependency detail.
+   *
+   * Returns a discriminated result so callers can distinguish a package that
+   * genuinely doesn't exist on the registry (`not-found`) from a transient
+   * failure such as a network error or unreachable registry (`error`).
    */
-  queryRegistry(packageName: string): Promise<RegistryMeta | null>;
+  queryRegistry(packageName: string): Promise<RegistryQueryResult>;
 }
+
+/**
+ * Outcome of a registry metadata query.
+ *
+ * - `found`: the package exists and metadata was retrieved.
+ * - `not-found`: the registry responded that no such package exists (e.g. 404).
+ * - `error`: the registry could not be reached or returned an unusable response;
+ *   retrying later may succeed.
+ */
+export type RegistryQueryResult =
+  | { readonly status: 'found'; readonly meta: RegistryMeta }
+  | { readonly status: 'not-found' }
+  | { readonly status: 'error' };
 
 /**
  * Returned by parseManifests. Contains everything extractable from
@@ -117,4 +134,10 @@ export interface MinimalDependency {
   readonly version: string;
   readonly constraint: string;
   readonly scope: DependencyScope;
+  /**
+   * True when the dependency is a local/workspace/path reference rather than a
+   * registry package. Adapters set this when the manifest points at a local
+   * path; omitted (treated as false) for normal registry dependencies.
+   */
+  readonly local?: boolean;
 }

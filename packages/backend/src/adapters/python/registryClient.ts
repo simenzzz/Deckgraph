@@ -5,7 +5,7 @@
  * (latest version, license, deprecation).
  */
 
-import type { RegistryMeta } from '@deckgraph/shared';
+import type { RegistryMeta, RegistryQueryResult } from '@deckgraph/shared';
 import type { RegistryCache } from '../registryCache.js';
 import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { createLogger } from '../../logger.js';
@@ -38,9 +38,9 @@ export async function queryPypiRegistry(
   packageName: string,
   cache: RegistryCache,
   rateLimiter: RegistryRateLimiter,
-): Promise<RegistryMeta | null> {
+): Promise<RegistryQueryResult> {
   const cached = cache.get('pypi', packageName);
-  if (cached) return cached;
+  if (cached) return { status: 'found', meta: cached };
 
   await rateLimiter.acquire('pypi');
 
@@ -52,13 +52,13 @@ export async function queryPypiRegistry(
     if (!response.ok) {
       if (response.status === 404) {
         logger.debug({ packageName }, 'Package not found on PyPI');
-        return null;
+        return { status: 'not-found' };
       }
       logger.warn(
         { packageName, status: response.status },
         'PyPI registry request failed',
       );
-      return null;
+      return { status: 'error' };
     }
 
     const data = (await response.json()) as PypiResponse;
@@ -66,7 +66,7 @@ export async function queryPypiRegistry(
 
     if (!info?.version) {
       logger.warn({ packageName }, 'No version found in PyPI response');
-      return null;
+      return { status: 'error' };
     }
 
     const homepage =
@@ -90,10 +90,10 @@ export async function queryPypiRegistry(
     };
 
     cache.set('pypi', packageName, meta);
-    return meta;
+    return { status: 'found', meta };
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.error({ packageName, error: detail }, 'PyPI registry query failed');
-    return null;
+    return { status: 'error' };
   }
 }

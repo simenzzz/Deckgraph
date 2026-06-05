@@ -43,7 +43,12 @@ export async function parseGoManifests(
   const parsed = parseGoMod(rawContent);
 
   const resolvedVersions = await tryReadGoSum(projectRoot, moduleDir);
-  const dependencies = buildDependencies(parsed.requires, parsed.replaces, resolvedVersions);
+  const dependencies = buildDependencies(
+    parsed.requires,
+    parsed.replaces,
+    parsed.localReplaces,
+    resolvedVersions,
+  );
   const moduleName = parsed.modulePath.split('/').pop() ?? basename(moduleDir);
 
   const result: ManifestResult = {
@@ -63,6 +68,8 @@ interface GoModParsed {
   readonly goVersion: string | null;
   readonly requires: readonly GoModRequire[];
   readonly replaces: ReadonlyMap<string, { readonly path: string; readonly version: string }>;
+  /** Require paths redirected to a local filesystem path via a `replace` directive. */
+  readonly localReplaces: ReadonlySet<string>;
 }
 
 /**
@@ -74,6 +81,7 @@ function parseGoMod(content: string): GoModParsed {
   let goVersion: string | null = null;
   const requires: GoModRequire[] = [];
   const replaces = new Map<string, { path: string; version: string }>();
+  const localReplaces = new Set<string>();
 
   let inRequireBlock = false;
   let inReplaceBlock = false;
@@ -140,22 +148,30 @@ function parseGoMod(content: string): GoModParsed {
       continue;
     }
 
-    // Replace directive (single-line or inside block)
+    // Replace directive (single-line or inside block). The replacement version
+    // is optional because local path replacements (`=> ./lib`) have no version.
     const replaceLineMatch = inReplaceBlock
-      ? line.match(/^(\S+)(?:\s+\S+)?\s+=>\s+(\S+)\s+(\S+)$/)
-      : line.match(/^replace\s+(\S+)(?:\s+\S+)?\s+=>\s+(\S+)\s+(\S+)$/);
+      ? line.match(/^(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+(\S+))?$/)
+      : line.match(/^replace\s+(\S+)(?:\s+\S+)?\s+=>\s+(\S+)(?:\s+(\S+))?$/);
 
     if (replaceLineMatch) {
+      const oldPath = replaceLineMatch[1]!;
       const newPath = replaceLineMatch[2]!;
-      // Skip local path replacements
+      const newVersion = replaceLineMatch[3];
+      // A local path replacement marks the require as a local/workspace dep
+      // rather than redirecting it to another registry module.
       if (newPath.startsWith('./') || newPath.startsWith('../') || newPath.startsWith('/')) {
+        localReplaces.add(oldPath);
         continue;
       }
-      replaces.set(replaceLineMatch[1]!, { path: newPath, version: replaceLineMatch[3]! });
+      // A remote replacement always carries a version; ignore malformed ones.
+      if (newVersion) {
+        replaces.set(oldPath, { path: newPath, version: newVersion });
+      }
     }
   }
 
-  return { modulePath, goVersion, requires, replaces };
+  return { modulePath, goVersion, requires, replaces, localReplaces };
 }
 
 // go.sum Parsing
@@ -225,9 +241,23 @@ function parseGoSum(content: string): ReadonlyMap<string, string> {
 function buildDependencies(
   requires: readonly GoModRequire[],
   replaces: ReadonlyMap<string, { readonly path: string; readonly version: string }>,
+  localReplaces: ReadonlySet<string>,
   resolvedVersions: ResolvedVersions | null,
 ): readonly MinimalDependency[] {
   return requires.map((req) => {
+    // A locally-replaced require keeps its original module identity but isn't
+    // resolvable from the Go proxy — flag it local instead of applying a remote
+    // replacement.
+    if (localReplaces.has(req.path)) {
+      return {
+        name: req.path,
+        version: req.version,
+        constraint: req.version,
+        scope: 'runtime' as const,
+        local: true,
+      };
+    }
+
     const replacement = replaces.get(req.path);
     const name = replacement?.path ?? req.path;
     const constraint = replacement?.version ?? req.version;

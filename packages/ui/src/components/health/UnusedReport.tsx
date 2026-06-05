@@ -6,18 +6,42 @@
 import type { UnusedDep } from '@/hooks/useHealthReport';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { HealthPrereqEmptyState } from './HealthPrereqEmptyState';
+import type { HealthPrereqStore } from '@/stores/healthPrereqStore';
 
 interface UnusedReportProps {
   readonly deps: readonly UnusedDep[];
   readonly hasImportAnalysis: boolean;
+  readonly importTargetCount?: number;
+  readonly importStatus?: HealthPrereqStore | null;
+  readonly actionDisabled?: boolean;
+  readonly onOpenImportTarget?: () => void;
+  readonly onAnalyzeImports?: () => void;
 }
 
-export function UnusedReport({ deps, hasImportAnalysis }: UnusedReportProps) {
+export function UnusedReport({
+  deps,
+  hasImportAnalysis,
+  importTargetCount = 0,
+  importStatus = null,
+  actionDisabled = false,
+  onOpenImportTarget = () => {},
+  onAnalyzeImports = () => {},
+}: UnusedReportProps) {
   if (!hasImportAnalysis) {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground" data-testid="unused-no-analysis">
-        Import analysis has not been run yet. Analyze imports on modules to detect unused dependencies.
-      </div>
+      <HealthPrereqEmptyState
+        testId="unused-no-analysis"
+        title="Import analysis has not been run"
+        description="Open a module in Module Explorer or analyze imports for the visible modules."
+        explorerLabel="Open in Module Explorer"
+        actionLabel="Analyze modules"
+        targetCount={importTargetCount}
+        status={importStatus}
+        actionDisabled={actionDisabled}
+        onOpenExplorer={onOpenImportTarget}
+        onRunAction={onAnalyzeImports}
+      />
     );
   }
 

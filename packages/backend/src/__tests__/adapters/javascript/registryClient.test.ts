@@ -35,20 +35,20 @@ describe('queryNpmRegistry', () => {
 
     const result = await queryNpmRegistry('express', cache, limiter);
 
-    expect(result).not.toBeNull();
-    expect(result!.latestVersion).toBe('4.18.2');
-    expect(result!.description).toBe('Fast web framework');
-    expect(result!.license).toBe('MIT');
-    expect(result!.deprecated).toBe(false);
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.latestVersion).toBe('4.18.2');
+    expect(result.meta.description).toBe('Fast web framework');
+    expect(result.meta.license).toBe('MIT');
+    expect(result.meta.deprecated).toBe(false);
   });
 
-  it('returns null for 404', async () => {
+  it('returns not-found for 404', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('Not Found', { status: 404 }),
     );
 
     const result = await queryNpmRegistry('nonexistent-pkg-abc', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
   it('returns cached result on second call', async () => {
@@ -65,8 +65,8 @@ describe('queryNpmRegistry', () => {
     await queryNpmRegistry('test-pkg', cache, limiter);
     const second = await queryNpmRegistry('test-pkg', cache, limiter);
 
-    expect(second).not.toBeNull();
-    expect(second!.latestVersion).toBe('1.0.0');
+    if (second.status !== 'found') throw new Error(`expected found, got ${second.status}`);
+    expect(second.meta.latestVersion).toBe('1.0.0');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -82,17 +82,18 @@ describe('queryNpmRegistry', () => {
     );
 
     const result = await queryNpmRegistry('old-pkg', cache, limiter);
-    expect(result!.deprecated).toBe(true);
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.deprecated).toBe(true);
   });
 
-  it('returns null on network error', async () => {
+  it('returns error on network error', async () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network error'));
 
     const result = await queryNpmRegistry('express', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'error' });
   });
 
-  it('returns null when no latest dist-tag', async () => {
+  it('returns error when no latest dist-tag', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
         JSON.stringify({ 'dist-tags': {} }),
@@ -101,6 +102,6 @@ describe('queryNpmRegistry', () => {
     );
 
     const result = await queryNpmRegistry('broken-pkg', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'error' });
   });
 });

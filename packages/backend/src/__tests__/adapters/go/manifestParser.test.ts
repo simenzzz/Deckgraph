@@ -139,7 +139,41 @@ describe('parseGoManifests', () => {
       expect(depB.constraint).toBe('v3.0.0');
     });
 
-    it('skips local path replacements in block', async () => {
+    it('ignores a versionless remote replacement, keeping the original require', async () => {
+      mockFiles({
+        'go.mod': [
+          'module github.com/example/app',
+          'go 1.21',
+          'require github.com/old/pkg v1.0.0',
+          'replace github.com/old/pkg => github.com/new/pkg',
+        ].join('\n'),
+      });
+
+      const result = await parseGoManifests('/project', '.');
+
+      expect(result.dependencies).toHaveLength(1);
+      const dep = result.dependencies[0]!;
+      expect(dep.name).toBe('github.com/old/pkg');
+      expect(dep.constraint).toBe('v1.0.0');
+      expect(dep.local).toBeFalsy();
+    });
+
+    it('does not mark a remote replacement as local', async () => {
+      mockFiles({
+        'go.mod': [
+          'module github.com/example/app',
+          'go 1.21',
+          'require github.com/old/pkg v1.0.0',
+          'replace github.com/old/pkg => github.com/new/pkg v2.0.0',
+        ].join('\n'),
+      });
+
+      const result = await parseGoManifests('/project', '.');
+
+      expect(result.dependencies[0]!.local).toBeFalsy();
+    });
+
+    it('marks block local path replacements as local', async () => {
       mockFiles({
         'go.mod': [
           'module github.com/example/app',
@@ -153,10 +187,12 @@ describe('parseGoManifests', () => {
 
       const result = await parseGoManifests('/project', '.');
 
-      expect(result.dependencies[0]!.name).toBe('github.com/example/lib');
+      const dep = result.dependencies[0]!;
+      expect(dep.name).toBe('github.com/example/lib');
+      expect(dep.local).toBe(true);
     });
 
-    it('skips local path replacements', async () => {
+    it('marks local path replacements as local, keeping original identity', async () => {
       mockFiles({
         'go.mod': [
           'module github.com/example/app',
@@ -170,9 +206,10 @@ describe('parseGoManifests', () => {
 
       expect(result.dependencies).toHaveLength(1);
       const dep = result.dependencies[0]!;
-      // Not replaced because local path
+      // Keeps original module identity, not the local path, and is flagged local.
       expect(dep.name).toBe('github.com/example/lib');
       expect(dep.constraint).toBe('v1.0.0');
+      expect(dep.local).toBe(true);
     });
   });
 

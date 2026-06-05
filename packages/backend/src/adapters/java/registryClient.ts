@@ -5,7 +5,7 @@
  * (latest version, description).
  */
 
-import type { RegistryMeta } from '@deckgraph/shared';
+import type { RegistryMeta, RegistryQueryResult } from '@deckgraph/shared';
 import type { RegistryCache } from '../registryCache.js';
 import type { RegistryRateLimiter } from '../registryRateLimiter.js';
 import { createLogger } from '../../logger.js';
@@ -62,14 +62,14 @@ export async function queryMavenRegistry(
   packageName: string,
   cache: RegistryCache,
   rateLimiter: RegistryRateLimiter,
-): Promise<RegistryMeta | null> {
+): Promise<RegistryQueryResult> {
   const cached = cache.get('maven', packageName);
-  if (cached) return cached;
+  if (cached) return { status: 'found', meta: cached };
 
   const coord = parseMavenCoordinate(packageName);
   if (!coord) {
     logger.debug({ packageName }, 'Cannot parse Maven coordinate');
-    return null;
+    return { status: 'not-found' };
   }
 
   await rateLimiter.acquire('maven');
@@ -85,7 +85,7 @@ export async function queryMavenRegistry(
         { packageName, status: response.status },
         'Maven Central request failed',
       );
-      return null;
+      return { status: 'error' };
     }
 
     const data = (await response.json()) as MavenSearchResponse;
@@ -93,14 +93,14 @@ export async function queryMavenRegistry(
 
     if (!docs || docs.length === 0) {
       logger.debug({ packageName }, 'No results from Maven Central');
-      return null;
+      return { status: 'not-found' };
     }
 
     const doc = docs[0]!;
 
     if (!doc.latestVersion) {
       logger.warn({ packageName }, 'No latest version in Maven Central response');
-      return null;
+      return { status: 'error' };
     }
 
     const publishedAt = doc.timestamp
@@ -118,10 +118,10 @@ export async function queryMavenRegistry(
     };
 
     cache.set('maven', packageName, meta);
-    return meta;
+    return { status: 'found', meta };
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'unknown error';
     logger.error({ packageName, error: detail }, 'Maven Central query failed');
-    return null;
+    return { status: 'error' };
   }
 }

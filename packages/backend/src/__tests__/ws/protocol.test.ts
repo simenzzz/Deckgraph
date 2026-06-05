@@ -27,16 +27,24 @@ vi.mock('../../analysis/importResolver.js', () => ({
   resolveImports: vi.fn(),
 }));
 
-vi.mock('../../ws/demoRepository.js', () => ({
-  importDemoRepository: vi.fn(),
-  importPublicGithubRepository: vi.fn(),
-}));
+vi.mock('../../ws/demoRepository.js', async (importActual) => {
+  const actual = await importActual<typeof import('../../ws/demoRepository.js')>();
+  return {
+    ...actual,
+    importDemoRepository: vi.fn(),
+    importPublicGithubRepository: vi.fn(),
+  };
+});
 
 import { scanProject } from '../../scanner/scanner.js';
 import { stat } from 'node:fs/promises';
 import { executeQuery } from '../../graph/queryEngine.js';
 import { resolveImports } from '../../analysis/importResolver.js';
-import { importDemoRepository, importPublicGithubRepository } from '../../ws/demoRepository.js';
+import {
+  DemoRepositoryError,
+  importDemoRepository,
+  importPublicGithubRepository,
+} from '../../ws/demoRepository.js';
 import { handleMessage } from '../../ws/protocol.js';
 
 const mockScanProject = vi.mocked(scanProject);
@@ -362,6 +370,54 @@ describe('handleMessage', () => {
       expect(connection.customDemoRepositories).toEqual([customRepository]);
       expect(connection.scanResult).toBe(scanResult);
       expect(connection.projectRoot).toBe('/tmp/deckgraph-demo-cache/custom-example-demo-repo');
+    });
+
+    it('maps a not-found import failure to a precise, clean error', async () => {
+      const state = createMockState({ demoMode: true });
+      mockImportPublicGithubRepository.mockRejectedValue(
+        new DemoRepositoryError('Repository not found or is private', 'not_found'),
+      );
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_public_github_repo',
+          requestId: 'missing-1',
+          url: 'https://github.com/example/missing',
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('error');
+      if (result.type === 'error') {
+        expect(result.message).toBe('Repository not found or is private');
+        expect(result.message).not.toContain('terminal prompts');
+        expect(result.suggestion).toContain('public repositories');
+      }
+    });
+
+    it('surfaces the specific message for an invalid import URL', async () => {
+      const state = createMockState({ demoMode: true });
+      mockImportPublicGithubRepository.mockRejectedValue(
+        new DemoRepositoryError('Public repositories must use https://github.com URLs', 'validation'),
+      );
+
+      const result = await handleMessage(
+        JSON.stringify({
+          type: 'import_public_github_repo',
+          requestId: 'bad-url-1',
+          url: 'https://github.com/example/x',
+        }),
+        connection,
+        state,
+        emitProgress,
+      );
+
+      expect(result.type).toBe('error');
+      if (result.type === 'error') {
+        expect(result.message).toContain('Public repositories must use https://github.com URLs');
+      }
     });
 
     it('passes scan scope options for curated demo imports', async () => {
@@ -862,13 +918,16 @@ describe('handleMessage', () => {
         parseManifests: vi.fn(),
         analyzeImports: vi.fn(),
         queryRegistry: vi.fn().mockResolvedValue({
-          latestVersion: '18.3.0',
-          description: 'A JavaScript library for building UIs',
-          license: 'MIT',
-          homepage: 'https://reactjs.org',
-          downloads: 1_000_000,
-          deprecated: false,
-          publishedAt: '2024-01-01T00:00:00Z',
+          status: 'found',
+          meta: {
+            latestVersion: '18.3.0',
+            description: 'A JavaScript library for building UIs',
+            license: 'MIT',
+            homepage: 'https://reactjs.org',
+            downloads: 1_000_000,
+            deprecated: false,
+            publishedAt: '2024-01-01T00:00:00Z',
+          },
         }),
       });
       const state = createMockState({ scanResult, registry });
@@ -899,13 +958,16 @@ describe('handleMessage', () => {
         parseManifests: vi.fn(),
         analyzeImports: vi.fn(),
         queryRegistry: vi.fn().mockResolvedValue({
-          latestVersion: '18.3.0',
-          description: '',
-          license: null,
-          homepage: null,
-          downloads: null,
-          deprecated: false,
-          publishedAt: null,
+          status: 'found',
+          meta: {
+            latestVersion: '18.3.0',
+            description: '',
+            license: null,
+            homepage: null,
+            downloads: null,
+            deprecated: false,
+            publishedAt: null,
+          },
         }),
       });
       const state = createMockState({ scanResult, registry });
@@ -920,6 +982,98 @@ describe('handleMessage', () => {
 
       expect(emitProgress).toHaveBeenCalledWith('r5', expect.stringContaining('npm'), 0);
       expect(emitProgress).toHaveBeenCalledWith('r5', 'Enrichment complete', 1);
+    });
+
+    it('returns PACKAGE_NOT_FOUND when the registry has no such package', async () => {
+      const scanResult = createMockScanResult();
+      const registry = createAdapterRegistry();
+      registry.register({
+        ecosystem: 'npm',
+        manifestFiles: ['package.json'],
+        sourceExtensions: ['.js', '.ts'],
+        parseManifests: vi.fn(),
+        analyzeImports: vi.fn(),
+        queryRegistry: vi.fn().mockResolvedValue({ status: 'not-found' }),
+      });
+      const state = createMockState({ scanResult, registry });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'npm',
+        packageName: 'react',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      expect((result as ErrorMessage).message).toContain('not found on the registry');
+    });
+
+    it('returns REGISTRY_UNREACHABLE when the registry query errors', async () => {
+      const scanResult = createMockScanResult();
+      const registry = createAdapterRegistry();
+      registry.register({
+        ecosystem: 'npm',
+        manifestFiles: ['package.json'],
+        sourceExtensions: ['.js', '.ts'],
+        parseManifests: vi.fn(),
+        analyzeImports: vi.fn(),
+        queryRegistry: vi.fn().mockResolvedValue({ status: 'error' }),
+      });
+      const state = createMockState({ scanResult, registry });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'npm',
+        packageName: 'react',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      expect((result as ErrorMessage).message).toContain('Could not reach');
+    });
+
+    it('short-circuits local packages without querying the registry', async () => {
+      const baseScan = createMockScanResult();
+      const baseModule = baseScan.project.modules[0]!;
+      const baseDep = baseModule.dependencies[0]!;
+      const scanResult: ScanResult = {
+        ...baseScan,
+        project: {
+          ...baseScan.project,
+          modules: [
+            {
+              ...baseModule,
+              dependencies: [{ ...baseDep, name: 'tideway-ingest', local: true }],
+            },
+          ],
+        },
+      };
+
+      const queryRegistry = vi.fn();
+      const registry = createAdapterRegistry();
+      registry.register({
+        ecosystem: 'npm',
+        manifestFiles: ['package.json'],
+        sourceExtensions: ['.js', '.ts'],
+        parseManifests: vi.fn(),
+        analyzeImports: vi.fn(),
+        queryRegistry,
+      });
+      const state = createMockState({ scanResult, registry });
+
+      const raw = JSON.stringify({
+        type: 'enrich_dependency',
+        requestId: 'r5',
+        ecosystem: 'npm',
+        packageName: 'tideway-ingest',
+      });
+      const result = await handleMessage(raw, connection, state, emitProgress);
+
+      expect(result.type).toBe('error');
+      expect((result as ErrorMessage).message).toContain('Local package');
+      expect(queryRegistry).not.toHaveBeenCalled();
     });
   });
 });

@@ -38,10 +38,10 @@ describe('queryPypiRegistry', () => {
 
     const result = await queryPypiRegistry('flask', cache, limiter);
 
-    expect(result).not.toBeNull();
-    expect(result!.latestVersion).toBe('2.3.3');
-    expect(result!.license).toBe('BSD-3-Clause');
-    expect(result!.deprecated).toBe(false);
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.latestVersion).toBe('2.3.3');
+    expect(result.meta.license).toBe('BSD-3-Clause');
+    expect(result.meta.deprecated).toBe(false);
   });
 
   it('detects deprecated packages via classifier', async () => {
@@ -58,16 +58,17 @@ describe('queryPypiRegistry', () => {
     );
 
     const result = await queryPypiRegistry('old-pkg', cache, limiter);
-    expect(result!.deprecated).toBe(true);
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.deprecated).toBe(true);
   });
 
-  it('returns null for 404', async () => {
+  it('returns not-found for 404', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('Not Found', { status: 404 }),
     );
 
     const result = await queryPypiRegistry('nonexistent', cache, limiter);
-    expect(result).toBeNull();
+    expect(result).toEqual({ status: 'not-found' });
   });
 
   it('uses project_urls as fallback for homepage', async () => {
@@ -85,7 +86,8 @@ describe('queryPypiRegistry', () => {
     );
 
     const result = await queryPypiRegistry('pkg', cache, limiter);
-    expect(result!.homepage).toBe('https://github.com/example/pkg');
+    if (result.status !== 'found') throw new Error(`expected found, got ${result.status}`);
+    expect(result.meta.homepage).toBe('https://github.com/example/pkg');
   });
 
   it('caches results', async () => {

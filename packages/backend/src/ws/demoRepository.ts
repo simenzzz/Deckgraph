@@ -37,10 +37,30 @@ export interface ImportPublicGithubRepositoryOptions {
   readonly existingRepositories: readonly DemoRepository[];
 }
 
+/**
+ * How an import failed, so the WS layer can pick a precise user-facing message.
+ * - `validation`   — the submitted URL is malformed or a duplicate
+ * - `not_found`    — GitHub returned 404 (repo is missing or private)
+ * - `private`      — repo exists but is private (only detectable with a token)
+ * - `rate_limited` — GitHub rate limit exhausted
+ * - `clone_failed` — the clone itself failed (network, timeout, git error)
+ * - `unavailable`  — generic / unclassified
+ */
+export type DemoRepositoryErrorKind =
+  | 'validation'
+  | 'not_found'
+  | 'private'
+  | 'rate_limited'
+  | 'clone_failed'
+  | 'unavailable';
+
 export class DemoRepositoryError extends Error {
-  constructor(message: string) {
+  readonly kind: DemoRepositoryErrorKind;
+
+  constructor(message: string, kind: DemoRepositoryErrorKind = 'unavailable') {
     super(message);
     this.name = 'DemoRepositoryError';
+    this.kind = kind;
   }
 }
 
@@ -49,6 +69,25 @@ const demoRepositoryListSchema = z.array(demoRepositorySchema).max(20);
 const MAX_DESCRIPTION_LENGTH = 512;
 const MAX_CLONE_ATTEMPTS = 3;
 const CLONE_RETRY_DELAY_MS = 1_000;
+const GITHUB_API_BASE = 'https://api.github.com';
+const GITHUB_API_TIMEOUT_MS = 8_000;
+/** Allowed characters for a GitHub owner or repository name segment. */
+const GITHUB_SEGMENT = /^[A-Za-z0-9_.-]+$/;
+
+/** Minimal shape of the GitHub "get a repository" response we rely on. */
+const githubRepositorySchema = z.object({ private: z.boolean() });
+
+/**
+ * Result of probing a repository's accessibility on GitHub.
+ * `unreachable` is best-effort: the caller should fall back to cloning rather
+ * than block a valid import on a transient API hiccup.
+ */
+export type GithubRepositoryAccess =
+  | 'public'
+  | 'private'
+  | 'not_found'
+  | 'rate_limited'
+  | 'unreachable';
 const RETRYABLE_CLONE_FAILURES = [
   /early EOF/i,
   /RPC failed/i,
@@ -95,6 +134,69 @@ export async function importDemoRepository(
   });
 }
 
+/**
+ * Best-effort probe of a repository's accessibility via the GitHub REST API.
+ *
+ * An unauthenticated request returns 404 for both missing and private repos
+ * (GitHub hides private repos' existence), so `not_found` covers both cases.
+ * When a token is configured we can additionally surface a true `private`.
+ * Any network/timeout/unexpected condition resolves to `unreachable` so the
+ * caller can fall back to cloning instead of blocking a valid import.
+ */
+export async function checkGithubRepositoryAccess(
+  owner: string,
+  repo: string,
+): Promise<GithubRepositoryAccess> {
+  // Defense in depth: the production caller pre-validates owner/repo, but this
+  // is an exported function — guard and encode so a future caller can never
+  // inject path/query segments into the api.github.com URL.
+  if (!GITHUB_SEGMENT.test(owner) || !GITHUB_SEGMENT.test(repo)) return 'unreachable';
+
+  const token = process.env.GITHUB_TOKEN ?? process.env.DECKGRAPH_GITHUB_TOKEN;
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'deckgraph',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), GITHUB_API_TIMEOUT_MS);
+
+  let response: Response;
+  try {
+    const target = `${GITHUB_API_BASE}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`;
+    // `redirect: 'manual'` keeps the Authorization header from following a
+    // redirect to another origin; the endpoint should never legitimately 3xx.
+    response = await fetch(target, { headers, signal: controller.signal, redirect: 'manual' });
+  } catch {
+    return 'unreachable';
+  } finally {
+    clearTimeout(timer);
+  }
+
+  if (response.status === 404) return 'not_found';
+
+  if (response.status === 403 || response.status === 429) {
+    return response.headers.get('x-ratelimit-remaining') === '0'
+      ? 'rate_limited'
+      : 'unreachable';
+  }
+
+  if (response.status === 200) {
+    try {
+      const body = githubRepositorySchema.parse(await response.json());
+      return body.private ? 'private' : 'public';
+    } catch {
+      // 200 but an unreadable/unexpected body: stay best-effort and let the
+      // clone be authoritative rather than guessing public/private.
+      return 'unreachable';
+    }
+  }
+
+  return 'unreachable';
+}
+
 export async function importPublicGithubRepository(
   options: ImportPublicGithubRepositoryOptions,
 ): Promise<ImportedDemoRepository> {
@@ -113,7 +215,18 @@ export async function importPublicGithubRepository(
   };
 
   if (options.existingRepositories.some((repo) => repo.id === repository.id || repo.url === repository.url)) {
-    throw new DemoRepositoryError('That public repository has already been added');
+    throw new DemoRepositoryError('That public repository has already been added', 'validation');
+  }
+
+  const access = await checkGithubRepositoryAccess(normalized.owner, normalized.repo);
+  if (access === 'not_found') {
+    throw new DemoRepositoryError('Repository not found or is private', 'not_found');
+  }
+  if (access === 'private') {
+    throw new DemoRepositoryError('That repository is private', 'private');
+  }
+  if (access === 'rate_limited') {
+    throw new DemoRepositoryError('GitHub rate limit reached', 'rate_limited');
   }
 
   const imported = await importRepositoryByDefinition({
@@ -139,29 +252,29 @@ export function normalizePublicGithubRepositoryUrl(
   try {
     url = new URL(raw);
   } catch {
-    throw new DemoRepositoryError('Enter a valid GitHub repository URL');
+    throw new DemoRepositoryError('Enter a valid GitHub repository URL', 'validation');
   }
 
   if (url.protocol !== 'https:' || url.hostname !== 'github.com') {
-    throw new DemoRepositoryError('Public repositories must use https://github.com URLs');
+    throw new DemoRepositoryError('Public repositories must use https://github.com URLs', 'validation');
   }
 
   if (url.username || url.password) {
-    throw new DemoRepositoryError('GitHub repository URLs must not include credentials');
+    throw new DemoRepositoryError('GitHub repository URLs must not include credentials', 'validation');
   }
 
   if (url.search || url.hash) {
-    throw new DemoRepositoryError('GitHub repository URLs must point directly at owner/repo');
+    throw new DemoRepositoryError('GitHub repository URLs must point directly at owner/repo', 'validation');
   }
 
   const parts = url.pathname.replace(/\/+$/, '').replace(/\.git$/, '').split('/').filter(Boolean);
   if (parts.length !== 2) {
-    throw new DemoRepositoryError('GitHub repository URLs must point directly at owner/repo');
+    throw new DemoRepositoryError('GitHub repository URLs must point directly at owner/repo', 'validation');
   }
 
   const [owner, repo] = parts;
-  if (!owner || !repo || !/^[A-Za-z0-9_.-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(repo)) {
-    throw new DemoRepositoryError('GitHub repository owner and name contain unsupported characters');
+  if (!owner || !repo || !GITHUB_SEGMENT.test(owner) || !GITHUB_SEGMENT.test(repo)) {
+    throw new DemoRepositoryError('GitHub repository owner and name contain unsupported characters', 'validation');
   }
 
   return {
@@ -246,7 +359,7 @@ async function cloneRepository(
   }
 
   await rm(targetPath, { recursive: true, force: true });
-  throw new DemoRepositoryError(`Could not import demo repository: ${lastError}`);
+  throw new DemoRepositoryError(`Could not import demo repository: ${lastError}`, 'clone_failed');
 }
 
 function normalizeDemoRepository(value: unknown): DemoRepository {

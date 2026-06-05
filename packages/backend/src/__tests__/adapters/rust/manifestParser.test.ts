@@ -187,6 +187,41 @@ describe('parseRustManifests', () => {
       const result = await parseRustManifests('/project', '.');
 
       expect(result.dependencies[0]?.constraint).toBe('*');
+      expect(result.dependencies[0]?.local).toBe(true);
+    });
+
+    it('marks string-version dependencies as non-local', async () => {
+      mockFiles({
+        'Cargo.toml': [
+          '[package]',
+          'name = "app"',
+          'version = "0.1.0"',
+          '',
+          '[dependencies]',
+          'serde = "1.0"',
+        ].join('\n'),
+      });
+
+      const result = await parseRustManifests('/project', '.');
+
+      expect(result.dependencies[0]?.local).toBeFalsy();
+    });
+
+    it('marks a version+path dependency as local', async () => {
+      mockFiles({
+        'Cargo.toml': [
+          '[package]',
+          'name = "app"',
+          'version = "0.1.0"',
+          '',
+          '[dependencies]',
+          'my-lib = { version = "1.0", path = "../my-lib" }',
+        ].join('\n'),
+      });
+
+      const result = await parseRustManifests('/project', '.');
+
+      expect(result.dependencies[0]?.local).toBe(true);
     });
 
     it('handles git-only dependency', async () => {

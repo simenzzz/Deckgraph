@@ -38,6 +38,7 @@ export type {
   ImportPackageMap,
   AdapterRegistry,
   MinimalDependency,
+  RegistryQueryResult,
 } from './types/adapters.js';
 
 // Types - Views

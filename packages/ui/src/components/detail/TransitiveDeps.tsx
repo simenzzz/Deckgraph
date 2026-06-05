@@ -7,14 +7,28 @@ import { Package } from 'lucide-react';
 
 interface TransitiveDepsProps {
   readonly transitiveDeps: readonly string[] | null;
+  readonly local?: boolean;
 }
 
-export function TransitiveDeps({ transitiveDeps }: TransitiveDepsProps) {
+export function TransitiveDeps({ transitiveDeps, local }: TransitiveDepsProps) {
+  // Local/workspace packages aren't resolved through a registry, so their
+  // transitive graph isn't tracked here.
+  if (local) {
+    return (
+      <Card className="p-4">
+        <p className="text-sm text-muted-foreground" data-testid="transitive-local">
+          Transitive dependencies aren&apos;t tracked for local workspace packages. Open the
+          module directly to see its dependencies.
+        </p>
+      </Card>
+    );
+  }
+
   if (!transitiveDeps) {
     return (
       <Card className="p-4">
         <p className="text-sm text-muted-foreground" data-testid="transitive-not-available">
-          Transitive dependency data is not yet available.
+          Transitive dependency analysis isn&apos;t available for this dependency.
         </p>
       </Card>
     );

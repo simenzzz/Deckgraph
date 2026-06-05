@@ -8,6 +8,8 @@ import type { OutdatedDep } from '@/hooks/useHealthReport';
 import { OutdatedBadge, SEVERITY_ORDER } from '@/components/detail/OutdatedBadge';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { HealthPrereqEmptyState } from './HealthPrereqEmptyState';
+import type { HealthPrereqStore } from '@/stores/healthPrereqStore';
 
 type SortField = 'name' | 'severity' | 'ecosystem';
 type SortDir = 'asc' | 'desc';
@@ -15,9 +17,22 @@ type SortDir = 'asc' | 'desc';
 interface OutdatedReportProps {
   readonly deps: readonly OutdatedDep[];
   readonly hasRegistryData: boolean;
+  readonly registryTargetCount?: number;
+  readonly registryStatus?: HealthPrereqStore | null;
+  readonly actionDisabled?: boolean;
+  readonly onOpenRegistryTarget?: () => void;
+  readonly onFetchRegistry?: () => void;
 }
 
-export function OutdatedReport({ deps, hasRegistryData }: OutdatedReportProps) {
+export function OutdatedReport({
+  deps,
+  hasRegistryData,
+  registryTargetCount = 0,
+  registryStatus = null,
+  actionDisabled = false,
+  onOpenRegistryTarget = () => {},
+  onFetchRegistry = () => {},
+}: OutdatedReportProps) {
   const [sortField, setSortField] = useState<SortField>('severity');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -48,9 +63,18 @@ export function OutdatedReport({ deps, hasRegistryData }: OutdatedReportProps) {
 
   if (!hasRegistryData) {
     return (
-      <div className="py-8 text-center text-sm text-muted-foreground" data-testid="outdated-no-data">
-        No registry data available yet. Click a dependency to trigger enrichment.
-      </div>
+      <HealthPrereqEmptyState
+        testId="outdated-no-data"
+        title="Registry data has not been fetched"
+        description="Open a dependency in Module Explorer or fetch registry info for the visible dependencies."
+        explorerLabel="Open in Module Explorer"
+        actionLabel="Fetch registry"
+        targetCount={registryTargetCount}
+        status={registryStatus}
+        actionDisabled={actionDisabled}
+        onOpenExplorer={onOpenRegistryTarget}
+        onRunAction={onFetchRegistry}
+      />
     );
   }
 

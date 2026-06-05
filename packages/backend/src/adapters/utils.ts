@@ -26,6 +26,21 @@ export async function readFileSafe(filePath: string): Promise<string | null> {
 }
 
 /**
+ * True when a parsed manifest dependency value is a table that points at a
+ * filesystem `path` (e.g. cargo `{ path = "../crate" }`, Poetry/Pipfile
+ * `{ path = "../lib" }`). Such dependencies are local/workspace members, not
+ * published to a public registry. The path itself is never used for any
+ * filesystem access — this is a read-only type check that yields a boolean.
+ */
+export function hasStringPathField(value: unknown): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as Record<string, unknown>)['path'] === 'string'
+  );
+}
+
+/**
  * Return unique directories to search: moduleDir first, then projectRoot
  * (only if different from moduleDir).
  */

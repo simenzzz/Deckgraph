@@ -71,6 +71,7 @@ export function toFullDependency(
     constraint: minimal.constraint,
     scope: minimal.scope,
     source: 'manifest',
+    local: minimal.local ?? false,
     concerns: [],
     usedInFiles: null,
     transitiveDeps: null,

@@ -65,8 +65,14 @@ export const ErrorCatalog = {
   },
   PACKAGE_NOT_FOUND: {
     code: 'PACKAGE_NOT_FOUND',
-    message: 'Package not found',
-    suggestion: 'Check the package name and ensure it exists on the registry',
+    message: 'Package not found on the registry',
+    suggestion:
+      'Check the package name. If it is a private or internal package, it may not be on the public registry',
+  },
+  LOCAL_PACKAGE_NO_REGISTRY: {
+    code: 'LOCAL_PACKAGE_NO_REGISTRY',
+    message: 'Local package, not on a public registry',
+    suggestion: 'Open the workspace module directly to inspect it',
   },
   DEPENDENCY_NOT_IN_PROJECT: {
     code: 'DEPENDENCY_NOT_IN_PROJECT',
@@ -128,6 +134,27 @@ export const ErrorCatalog = {
     code: 'DEMO_REPOSITORY_UNAVAILABLE',
     message: 'Demo repository unavailable',
     suggestion: 'Choose one of the listed demo repositories and try again',
+  },
+  DEMO_REPOSITORY_NOT_FOUND: {
+    code: 'DEMO_REPOSITORY_NOT_FOUND',
+    message: 'Repository not found or is private',
+    suggestion:
+      "Check the URL. Only public repositories can be imported — private repositories aren't accessible to the hosted demo",
+  },
+  DEMO_REPOSITORY_PRIVATE: {
+    code: 'DEMO_REPOSITORY_PRIVATE',
+    message: 'That repository is private',
+    suggestion: 'Only public repositories can be imported into the hosted demo',
+  },
+  DEMO_REPOSITORY_RATE_LIMITED: {
+    code: 'DEMO_REPOSITORY_RATE_LIMITED',
+    message: 'GitHub rate limit reached',
+    suggestion: 'Wait a few minutes and try the import again',
+  },
+  DEMO_IMPORT_FAILED: {
+    code: 'DEMO_IMPORT_FAILED',
+    message: "Couldn't import that repository",
+    suggestion: 'Check the URL and your connection, then try again',
   },
 } as const satisfies Record<string, ErrorEntry>;
 

@@ -22,6 +22,10 @@ describe('ErrorCatalog', () => {
       'PERMISSION_DENIED',
       'INVALID_CONFIG',
       'PACKAGE_MANAGER_FAIL',
+      'DEMO_REPOSITORY_NOT_FOUND',
+      'DEMO_REPOSITORY_PRIVATE',
+      'DEMO_REPOSITORY_RATE_LIMITED',
+      'DEMO_IMPORT_FAILED',
     ];
 
     for (const code of expectedCodes) {

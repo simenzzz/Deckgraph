@@ -89,6 +89,13 @@ export interface Dependency {
   readonly scope: DependencyScope;
   /** How this dependency was discovered */
   readonly source: 'manifest' | 'import-only' | 'both';
+  /**
+   * True when this is a local/workspace/path dependency that is not published
+   * to a public registry (e.g. a cargo `path = "../crate"` dependency). When
+   * true, registry enrichment is skipped — there is nothing to fetch. Absent or
+   * false means a normal registry-backed dependency.
+   */
+  readonly local?: boolean;
   /** Concern tags (from built-in database + user overrides) */
   readonly concerns: readonly string[];
 
