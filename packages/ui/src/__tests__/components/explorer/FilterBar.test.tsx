@@ -54,14 +54,23 @@ describe('FilterBar', () => {
     expect(screen.getByText('Clear')).toBeInTheDocument();
   });
 
-  it('resets filters on clear click', () => {
+  it('clears only module filters on clear click, leaving dependency filters', () => {
     useFilterStore.getState().toggleEcosystem('npm');
     useFilterStore.getState().setModuleSearch('api');
+    useFilterStore.getState().toggleScope('dev');
     render(<FilterBar />);
 
     fireEvent.click(screen.getByText('Clear'));
     const state = useFilterStore.getState();
     expect(state.ecosystems).toEqual([]);
     expect(state.moduleSearch).toBe('');
+    // Dependency-level scope filter is untouched by the top-bar Clear
+    expect(state.scopes).toEqual(['dev']);
+  });
+
+  it('does not show a Clear button when only a dependency-level filter is active', () => {
+    useFilterStore.setState({ scopes: ['dev'] });
+    render(<FilterBar />);
+    expect(screen.queryByText('Clear')).toBeNull();
   });
 });

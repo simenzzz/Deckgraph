@@ -5,6 +5,7 @@
 import { useState, useMemo } from 'react';
 import type { Dependency, ModuleView } from '@deckgraph/shared';
 import { useViewStore, useDetailStore, useConnectionStore } from '@/stores';
+import { useHasDependencyFilters } from '@/hooks';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { ScopeBadge } from './ScopeBadge';
@@ -26,6 +27,7 @@ export function DependencyList({ wsClient }: DependencyListProps) {
   const result = useViewStore((s) => s.result);
   const selectedModulePath = useViewStore((s) => s.selectedModulePath);
   const demoMode = useConnectionStore((s) => s.demoMode);
+  const hasDependencyFilters = useHasDependencyFilters();
 
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -64,9 +66,15 @@ export function DependencyList({ wsClient }: DependencyListProps) {
   const [installDialogOpen, setInstallDialogOpen] = useState(false);
 
   if (!selectedModule) {
+    // Keep the dependency filters reachable when an active filter has emptied the
+    // result set (and thus deselected the module) — otherwise the only way to undo
+    // that filter would disappear.
     return (
-      <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-        Select a module to view its dependencies.
+      <div>
+        {hasDependencyFilters && <DependencyFilters />}
+        <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
+          Select a module to view its dependencies.
+        </div>
       </div>
     );
   }

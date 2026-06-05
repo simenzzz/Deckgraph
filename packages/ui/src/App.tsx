@@ -15,12 +15,17 @@ import { ErrorBoundary } from '@/components/errors';
 import { useConnectionStore, useProjectStore, useViewStore } from '@/stores';
 import { createWsClient, getWsUrl, type WsClient } from '@/lib/wsClient';
 import { dispatchServerMessage } from '@/lib/messageDispatcher';
-import { useViewQuery } from '@/hooks';
+import { useViewQuery, useDemoNavLock } from '@/hooks';
 
 export function App() {
   const [wsClient, setWsClient] = useState<WsClient | null>(null);
   const clientRef = useRef<WsClient | null>(null);
   const currentView = useViewStore((s) => s.currentView);
+  const navLocked = useDemoNavLock();
+
+  // While the demo nav is locked, force Overview so a stale view can't render
+  // a page that the sidebar has hidden.
+  const activeView = navLocked ? 'overview' : currentView;
 
   useEffect(() => {
     const client = createWsClient({
@@ -51,16 +56,16 @@ export function App() {
 
   return (
     <Shell wsClient={wsClient}>
-      {currentView === 'overview' && (
+      {activeView === 'overview' && (
         <ErrorBoundary><ProjectOverview wsClient={wsClient} /></ErrorBoundary>
       )}
-      {currentView === 'explorer' && (
+      {activeView === 'explorer' && (
         <ErrorBoundary><ModuleExplorer wsClient={wsClient} /></ErrorBoundary>
       )}
-      {currentView === 'health' && (
+      {activeView === 'health' && (
         <ErrorBoundary><HealthReport wsClient={wsClient} /></ErrorBoundary>
       )}
-      {currentView === 'graph' && (
+      {activeView === 'graph' && (
         <ErrorBoundary><CrossLanguageGraph /></ErrorBoundary>
       )}
     </Shell>

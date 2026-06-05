@@ -1,15 +1,18 @@
 /**
- * Module-scoped filters shown above the dependency listings:
- * scope toggles, concern chips, and dependency search.
+ * Dependency-scoped filters: scope toggles, concern chips, and dependency search.
+ * Rendered above the dependency table for a selected module, or standalone (above
+ * the "select a module" prompt) while a dependency filter is active, so the filter
+ * stays reachable even when it has emptied the results.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import type { DependencyScope } from '@deckgraph/shared';
 import { useFilterStore, useViewStore } from '@/stores';
+import { useHasDependencyFilters } from '@/hooks';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 const SCOPES: readonly DependencyScope[] = ['runtime', 'dev', 'build', 'optional', 'peer'];
 const CONCERN_TAGS_PER_PAGE = 8;
@@ -22,6 +25,9 @@ export function DependencyFilters() {
   const toggleScope = useFilterStore((s) => s.toggleScope);
   const setSearch = useFilterStore((s) => s.setSearch);
   const setConcern = useFilterStore((s) => s.setConcern);
+  const clearDependencyFilters = useFilterStore((s) => s.clearDependencyFilters);
+
+  const hasDependencyFilters = useHasDependencyFilters();
 
   const result = useViewStore((s) => s.result);
 
@@ -79,6 +85,13 @@ export function DependencyFilters() {
           aria-label="Search dependencies"
         />
       </div>
+
+      {/* Clear dependency filters */}
+      {hasDependencyFilters && (
+        <Button variant="ghost" size="sm" onClick={clearDependencyFilters} className="h-7">
+          <X className="mr-1 h-3 w-3" /> Clear
+        </Button>
+      )}
 
       {/* Concern tag chips */}
       {availableConcerns.length > 0 && (

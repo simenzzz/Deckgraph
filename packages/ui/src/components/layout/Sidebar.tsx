@@ -3,6 +3,7 @@
  */
 
 import { useViewStore, type CurrentView } from '@/stores';
+import { useDemoNavLock } from '@/hooks';
 import { cn } from '@/lib/utils';
 import { LayoutDashboard, List, HeartPulse, Network } from 'lucide-react';
 
@@ -22,11 +23,15 @@ const NAV_ITEMS: readonly NavItem[] = [
 export function Sidebar() {
   const currentView = useViewStore((s) => s.currentView);
   const setView = useViewStore((s) => s.setView);
+  const navLocked = useDemoNavLock();
+
+  // In the hosted demo, restrict the nav to Overview until a repo is imported.
+  const items = navLocked ? NAV_ITEMS.filter((item) => item.id === 'overview') : NAV_ITEMS;
 
   return (
     <aside className="flex w-52 flex-col border-r bg-muted/30">
       <nav className="flex flex-col gap-1 p-2" role="tablist" aria-label="Main navigation">
-        {NAV_ITEMS.map((item) => (
+        {items.map((item) => (
           <button
             key={item.id}
             onClick={() => setView(item.id)}

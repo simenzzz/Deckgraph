@@ -20,6 +20,8 @@ export interface FilterActions {
   setSearch: (search: string) => void;
   setModuleSearch: (moduleSearch: string) => void;
   setConcern: (concern: string | null) => void;
+  clearModuleFilters: () => void;
+  clearDependencyFilters: () => void;
   resetFilters: () => void;
 }
 
@@ -66,6 +68,21 @@ export const useFilterStore = create<FilterStore>((set) => ({
 
   setConcern: (concern) =>
     set((state) => ({ ...state, concern })),
+
+  clearModuleFilters: () =>
+    set((state) => ({
+      ...state,
+      ecosystems: INITIAL_STATE.ecosystems,
+      moduleSearch: INITIAL_STATE.moduleSearch,
+    })),
+
+  clearDependencyFilters: () =>
+    set((state) => ({
+      ...state,
+      scopes: INITIAL_STATE.scopes,
+      concern: INITIAL_STATE.concern,
+      search: INITIAL_STATE.search,
+    })),
 
   resetFilters: () =>
     set((state) => ({ ...state, ...INITIAL_STATE })),

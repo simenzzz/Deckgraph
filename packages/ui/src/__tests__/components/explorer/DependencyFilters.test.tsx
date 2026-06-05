@@ -71,6 +71,49 @@ describe('DependencyFilters', () => {
     expect(useFilterStore.getState().search).toBe('react');
   });
 
+  it('shows no Clear button when no dependency filters are active', () => {
+    render(<DependencyFilters />);
+    expect(screen.queryByText('Clear')).toBeNull();
+  });
+
+  it('shows a Clear button once a scope filter is active', () => {
+    useFilterStore.setState({ scopes: ['dev'] });
+    render(<DependencyFilters />);
+    expect(screen.getByText('Clear')).toBeInTheDocument();
+  });
+
+  it('shows a Clear button when only a concern filter is active', () => {
+    useFilterStore.setState({ concern: 'auth' });
+    render(<DependencyFilters />);
+    expect(screen.getByText('Clear')).toBeInTheDocument();
+  });
+
+  it('shows a Clear button when only a dependency search is active', () => {
+    useFilterStore.setState({ search: 'react' });
+    render(<DependencyFilters />);
+    expect(screen.getByText('Clear')).toBeInTheDocument();
+  });
+
+  it('clears only dependency filters on Clear click, leaving module filters', () => {
+    useFilterStore.setState({
+      scopes: ['dev'],
+      search: 'react',
+      concern: 'auth',
+      ecosystems: ['npm'],
+      moduleSearch: 'api',
+    });
+    render(<DependencyFilters />);
+
+    fireEvent.click(screen.getByText('Clear'));
+    const state = useFilterStore.getState();
+    expect(state.scopes).toEqual([]);
+    expect(state.search).toBe('');
+    expect(state.concern).toBeNull();
+    // Module-level filters untouched
+    expect(state.ecosystems).toEqual(['npm']);
+    expect(state.moduleSearch).toBe('api');
+  });
+
   it('selects and deselects a concern chip', () => {
     useViewStore.setState({ result: makeViewResultWithConcerns(['auth', 'cache']) });
     render(<DependencyFilters />);

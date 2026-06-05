@@ -4,6 +4,7 @@ import { DependencyList } from '@/components/explorer/DependencyList';
 import { useViewStore } from '@/stores/viewStore';
 import { useDetailStore } from '@/stores/detailStore';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useFilterStore } from '@/stores/filterStore';
 import type { ViewResult } from '@deckgraph/shared';
 
 const mockResult: ViewResult = {
@@ -50,11 +51,29 @@ describe('DependencyList', () => {
       demoMode: false,
       demoRepositories: [],
     });
+    useFilterStore.getState().resetFilters();
   });
 
   it('shows prompt when no module selected', () => {
     render(<DependencyList wsClient={null} />);
     expect(screen.getByText(/Select a module/)).toBeInTheDocument();
+  });
+
+  it('does not render dependency filters on a pristine pane (no module, no filter)', () => {
+    render(<DependencyList wsClient={null} />);
+    expect(screen.queryByPlaceholderText('Search dependencies...')).toBeNull();
+  });
+
+  it('keeps dependency filters reachable when a filter is active but no module is selected', () => {
+    // A global scope filter emptied the results and deselected the module.
+    useViewStore.setState({ result: mockResult, selectedModulePath: null });
+    useFilterStore.setState({ scopes: ['dev'] });
+    render(<DependencyList wsClient={null} />);
+
+    expect(screen.getByPlaceholderText('Search dependencies...')).toBeInTheDocument();
+    expect(screen.getByText(/Select a module/)).toBeInTheDocument();
+    // Exactly one Clear (the dependency card's) — no duplicate render.
+    expect(screen.getAllByText('Clear')).toHaveLength(1);
   });
 
   it('renders dependencies for selected module', () => {

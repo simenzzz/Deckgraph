@@ -3,3 +3,5 @@ export { useDebounce } from './useDebounce';
 export { useDependencyDetail } from './useDependencyDetail';
 export { useHealthReport } from './useHealthReport';
 export { useHealthPrerequisiteActions } from './useHealthPrerequisiteActions';
+export { useDemoNavLock } from './useDemoNavLock';
+export { useHasDependencyFilters } from './useHasDependencyFilters';

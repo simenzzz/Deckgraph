@@ -50,6 +50,40 @@ describe('filterStore', () => {
     expect(useFilterStore.getState().moduleSearch).toBe('api');
   });
 
+  it('clearModuleFilters clears only module-level filters', () => {
+    useFilterStore.getState().toggleEcosystem('npm');
+    useFilterStore.getState().setModuleSearch('api');
+    useFilterStore.getState().toggleScope('dev');
+    useFilterStore.getState().setSearch('react');
+    useFilterStore.getState().setConcern('auth');
+    useFilterStore.getState().clearModuleFilters();
+
+    const state = useFilterStore.getState();
+    expect(state.ecosystems).toEqual([]);
+    expect(state.moduleSearch).toBe('');
+    // Dependency-level filters untouched
+    expect(state.scopes).toEqual(['dev']);
+    expect(state.search).toBe('react');
+    expect(state.concern).toBe('auth');
+  });
+
+  it('clearDependencyFilters clears only dependency-level filters', () => {
+    useFilterStore.getState().toggleEcosystem('npm');
+    useFilterStore.getState().setModuleSearch('api');
+    useFilterStore.getState().toggleScope('dev');
+    useFilterStore.getState().setSearch('react');
+    useFilterStore.getState().setConcern('auth');
+    useFilterStore.getState().clearDependencyFilters();
+
+    const state = useFilterStore.getState();
+    expect(state.scopes).toEqual([]);
+    expect(state.search).toBe('');
+    expect(state.concern).toBeNull();
+    // Module-level filters untouched
+    expect(state.ecosystems).toEqual(['npm']);
+    expect(state.moduleSearch).toBe('api');
+  });
+
   it('resetFilters clears all state', () => {
     useFilterStore.getState().toggleEcosystem('npm');
     useFilterStore.getState().toggleScope('dev');
