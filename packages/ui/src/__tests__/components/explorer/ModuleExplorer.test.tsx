@@ -15,6 +15,6 @@ describe('ModuleExplorer', () => {
 
   it('renders filter bar', () => {
     render(<ModuleExplorer wsClient={null} />);
-    expect(screen.getByPlaceholderText('Search dependencies...')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Search modules...')).toBeInTheDocument();
   });
 });

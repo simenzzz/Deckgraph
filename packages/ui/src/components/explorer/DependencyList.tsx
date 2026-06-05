@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { ScopeBadge } from './ScopeBadge';
 import { ConcernBadge } from './ConcernBadge';
+import { DependencyFilters } from './DependencyFilters';
 import { DependencyActions } from './DependencyActions';
 import { InstallDialog } from './InstallDialog';
 import { VirtualizedDependencyList } from './VirtualizedDependencyList';
@@ -70,78 +71,54 @@ export function DependencyList({ wsClient }: DependencyListProps) {
     );
   }
 
-  if (deps.length === 0) {
-    return (
+  const header = (
+    <div className="mb-2 flex items-center justify-between px-1">
+      <h3 className="text-sm font-medium">
+        {selectedModule.name}
+        <span className="ml-2 text-muted-foreground">
+          {deps.length} dep{deps.length !== 1 ? 's' : ''}
+        </span>
+      </h3>
+      {!demoMode && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setInstallDialogOpen(true)}
+          data-testid="install-package-button"
+        >
+          Install Package
+        </Button>
+      )}
+    </div>
+  );
+
+  const installDialog = !demoMode && (
+    <InstallDialog
+      open={installDialogOpen}
+      onOpenChange={setInstallDialogOpen}
+      modulePath={selectedModule.path}
+      moduleName={selectedModule.name}
+      moduleEcosystem={selectedModule.ecosystem}
+      wsClient={wsClient}
+    />
+  );
+
+  const body =
+    deps.length === 0 ? (
       <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
         No dependencies match the current filters.
       </div>
-    );
-  }
-
-  // Delegate to virtualized list for large datasets
-  if (sorted.length > 200) {
-    return (
-      <div>
-        <div className="mb-2 flex items-center justify-between px-1">
-          <h3 className="text-sm font-medium">
-            {selectedModule.name}
-            <span className="ml-2 text-muted-foreground">
-              {deps.length} dep{deps.length !== 1 ? 's' : ''}
-            </span>
-          </h3>
-          {!demoMode && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setInstallDialogOpen(true)}
-              data-testid="install-package-button"
-            >
-              Install Package
-            </Button>
-          )}
-        </div>
-        <VirtualizedDependencyList
-          deps={sorted}
-          modulePath={selectedModule.path}
-          wsClient={wsClient}
-          sortField={sortField}
-          sortDir={sortDir}
-          onToggleSort={toggleSort}
-        />
-        {!demoMode && (
-          <InstallDialog
-            open={installDialogOpen}
-            onOpenChange={setInstallDialogOpen}
-            modulePath={selectedModule.path}
-            moduleName={selectedModule.name}
-            moduleEcosystem={selectedModule.ecosystem}
-            wsClient={wsClient}
-          />
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <div className="mb-2 flex items-center justify-between px-1">
-        <h3 className="text-sm font-medium">
-          {selectedModule.name}
-          <span className="ml-2 text-muted-foreground">
-            {deps.length} dep{deps.length !== 1 ? 's' : ''}
-          </span>
-        </h3>
-        {!demoMode && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setInstallDialogOpen(true)}
-            data-testid="install-package-button"
-          >
-            Install Package
-          </Button>
-        )}
-      </div>
+    ) : sorted.length > 200 ? (
+      // Delegate to virtualized list for large datasets
+      <VirtualizedDependencyList
+        deps={sorted}
+        modulePath={selectedModule.path}
+        wsClient={wsClient}
+        sortField={sortField}
+        sortDir={sortDir}
+        onToggleSort={toggleSort}
+      />
+    ) : (
       <Table>
         <TableHeader>
           <TableRow>
@@ -170,17 +147,14 @@ export function DependencyList({ wsClient }: DependencyListProps) {
           ))}
         </TableBody>
       </Table>
+    );
 
-      {!demoMode && (
-        <InstallDialog
-          open={installDialogOpen}
-          onOpenChange={setInstallDialogOpen}
-          modulePath={selectedModule.path}
-          moduleName={selectedModule.name}
-          moduleEcosystem={selectedModule.ecosystem}
-          wsClient={wsClient}
-        />
-      )}
+  return (
+    <div>
+      {header}
+      <DependencyFilters />
+      {body}
+      {installDialog}
     </div>
   );
 }

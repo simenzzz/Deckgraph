@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { DependencyList } from '@/components/explorer/DependencyList';
 import { useViewStore } from '@/stores/viewStore';
 import { useDetailStore } from '@/stores/detailStore';
@@ -76,8 +76,29 @@ describe('DependencyList', () => {
   it('shows scope badges', () => {
     useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
     render(<DependencyList wsClient={null} />);
-    expect(screen.getByText('runtime')).toBeInTheDocument();
-    expect(screen.getByText('dev')).toBeInTheDocument();
+    // Scope text also appears in the DependencyFilters toggles, so scope the
+    // assertion to the dependency table.
+    const table = screen.getByRole('table');
+    expect(within(table).getByText('runtime')).toBeInTheDocument();
+    expect(within(table).getByText('dev')).toBeInTheDocument();
+  });
+
+  it('renders dependency filters when a module is selected', () => {
+    useViewStore.setState({ result: mockResult, selectedModulePath: 'packages/app' });
+    render(<DependencyList wsClient={null} />);
+    expect(screen.getByPlaceholderText('Search dependencies...')).toBeInTheDocument();
+  });
+
+  it('keeps dependency filters visible when no deps match', () => {
+    const emptyResult: ViewResult = {
+      ...mockResult,
+      modules: [{ ...mockResult.modules[0], dependencies: [] }],
+    };
+    useViewStore.setState({ result: emptyResult, selectedModulePath: 'packages/app' });
+    render(<DependencyList wsClient={null} />);
+
+    expect(screen.getByPlaceholderText('Search dependencies...')).toBeInTheDocument();
+    expect(screen.getByText(/No dependencies match/)).toBeInTheDocument();
   });
 
   it('clicking dep name sets detailStore selection', () => {

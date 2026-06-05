@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ModuleList } from '@/components/explorer/ModuleList';
 import { useViewStore } from '@/stores/viewStore';
+import { useFilterStore } from '@/stores/filterStore';
 import type { ViewResult } from '@deckgraph/shared';
 import type { WsClient } from '@/lib/wsClient';
 
@@ -57,6 +58,7 @@ describe('ModuleList', () => {
       analyzingModulePath: null,
       analysisRequestId: null,
     });
+    useFilterStore.getState().resetFilters();
   });
 
   it('shows empty state when no modules', () => {
@@ -85,6 +87,32 @@ describe('ModuleList', () => {
     // Verify through test id
     const row = screen.getByTestId('module-packages/backend');
     expect(row.textContent).toContain('/5');
+  });
+
+  it('filters modules by name via module search', () => {
+    useViewStore.setState({ result: mockResult });
+    useFilterStore.getState().setModuleSearch('backend');
+    render(<ModuleList wsClient={null} />);
+
+    expect(screen.getByText('backend')).toBeInTheDocument();
+    expect(screen.queryByText('lib')).toBeNull();
+  });
+
+  it('filters modules by path via module search', () => {
+    useViewStore.setState({ result: mockResult });
+    useFilterStore.getState().setModuleSearch('packages/lib');
+    render(<ModuleList wsClient={null} />);
+
+    expect(screen.getByText('lib')).toBeInTheDocument();
+    expect(screen.queryByText('backend')).toBeNull();
+  });
+
+  it('shows empty state when module search matches nothing', () => {
+    useViewStore.setState({ result: mockResult });
+    useFilterStore.getState().setModuleSearch('nonexistent-module');
+    render(<ModuleList wsClient={null} />);
+
+    expect(screen.getByText(/No modules match/)).toBeInTheDocument();
   });
 
   it('sends analyze_imports for manifest-only modules', () => {

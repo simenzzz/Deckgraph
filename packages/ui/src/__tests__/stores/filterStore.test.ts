@@ -11,7 +11,8 @@ describe('filterStore', () => {
     expect(state.ecosystems).toEqual([]);
     expect(state.scopes).toEqual([]);
     expect(state.search).toBe('');
-    expect(state.showCrossEdges).toBe(false);
+    expect(state.moduleSearch).toBe('');
+    expect(state.concern).toBeNull();
   });
 
   it('toggleEcosystem adds ecosystem', () => {
@@ -44,22 +45,24 @@ describe('filterStore', () => {
     expect(useFilterStore.getState().search).toBe('react');
   });
 
-  it('setShowCrossEdges updates flag', () => {
-    useFilterStore.getState().setShowCrossEdges(true);
-    expect(useFilterStore.getState().showCrossEdges).toBe(true);
+  it('setModuleSearch updates module search string', () => {
+    useFilterStore.getState().setModuleSearch('api');
+    expect(useFilterStore.getState().moduleSearch).toBe('api');
   });
 
   it('resetFilters clears all state', () => {
     useFilterStore.getState().toggleEcosystem('npm');
     useFilterStore.getState().toggleScope('dev');
     useFilterStore.getState().setSearch('react');
-    useFilterStore.getState().setShowCrossEdges(true);
+    useFilterStore.getState().setModuleSearch('api');
+    useFilterStore.getState().setConcern('auth');
     useFilterStore.getState().resetFilters();
 
     const state = useFilterStore.getState();
     expect(state.ecosystems).toEqual([]);
     expect(state.scopes).toEqual([]);
     expect(state.search).toBe('');
-    expect(state.showCrossEdges).toBe(false);
+    expect(state.moduleSearch).toBe('');
+    expect(state.concern).toBeNull();
   });
 });

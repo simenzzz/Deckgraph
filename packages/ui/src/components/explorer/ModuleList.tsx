@@ -4,7 +4,7 @@
 
 import { useState, useMemo } from 'react';
 import type { ModuleView } from '@deckgraph/shared';
-import { useViewStore } from '@/stores';
+import { useFilterStore, useViewStore } from '@/stores';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { EcosystemBadge } from './EcosystemBadge';
 import { VirtualizedModuleList } from './VirtualizedModuleList';
@@ -25,6 +25,7 @@ export function ModuleList({ wsClient }: ModuleListProps) {
   const selectModule = useViewStore((s) => s.selectModule);
   const analyzingModulePath = useViewStore((s) => s.analyzingModulePath);
   const startModuleAnalysis = useViewStore((s) => s.startModuleAnalysis);
+  const moduleSearch = useFilterStore((s) => s.moduleSearch);
 
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -41,7 +42,13 @@ export function ModuleList({ wsClient }: ModuleListProps) {
   };
 
   const sorted = useMemo(() => {
-    const items = [...modules];
+    const query = moduleSearch.trim().toLowerCase();
+    const items = query
+      ? modules.filter(
+          (m) =>
+            m.name.toLowerCase().includes(query) || m.path.toLowerCase().includes(query),
+        )
+      : [...modules];
     items.sort((a, b) => {
       const dir = sortDir === 'asc' ? 1 : -1;
       switch (sortField) {
@@ -54,7 +61,7 @@ export function ModuleList({ wsClient }: ModuleListProps) {
       }
     });
     return items;
-  }, [modules, sortField, sortDir]);
+  }, [modules, moduleSearch, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -65,7 +72,7 @@ export function ModuleList({ wsClient }: ModuleListProps) {
     }
   };
 
-  if (modules.length === 0) {
+  if (sorted.length === 0) {
     return (
       <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
         No modules match the current filters.

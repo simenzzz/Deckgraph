@@ -18,7 +18,6 @@ export function useViewQuery(wsClient: WsClient | null): void {
   const ecosystems = useFilterStore((s) => s.ecosystems);
   const scopes = useFilterStore((s) => s.scopes);
   const search = useFilterStore((s) => s.search);
-  const showCrossEdges = useFilterStore((s) => s.showCrossEdges);
   const concern = useFilterStore((s) => s.concern);
   const project = useProjectStore((s) => s.project);
   const setLoading = useViewStore((s) => s.setLoading);
@@ -35,7 +34,6 @@ export function useViewQuery(wsClient: WsClient | null): void {
       ...(ecosystems.length > 0 ? { ecosystems } : {}),
       ...(scopes.length > 0 ? { scopes } : {}),
       ...(debouncedSearch.length > 0 ? { search: debouncedSearch } : {}),
-      ...(showCrossEdges ? { showCrossEdges: true } : {}),
       ...(concern ? { concern } : {}),
     };
 
@@ -49,5 +47,5 @@ export function useViewQuery(wsClient: WsClient | null): void {
     if (sent) {
       setLoading(true);
     }
-  }, [wsClient, project, ecosystems, scopes, debouncedSearch, showCrossEdges, concern, setLoading]);
+  }, [wsClient, project, ecosystems, scopes, debouncedSearch, concern, setLoading]);
 }

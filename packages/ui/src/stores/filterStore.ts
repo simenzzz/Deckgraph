@@ -10,7 +10,7 @@ export interface FilterState {
   readonly ecosystems: readonly Ecosystem[];
   readonly scopes: readonly DependencyScope[];
   readonly search: string;
-  readonly showCrossEdges: boolean;
+  readonly moduleSearch: string;
   readonly concern: string | null;
 }
 
@@ -18,7 +18,7 @@ export interface FilterActions {
   toggleEcosystem: (ecosystem: Ecosystem) => void;
   toggleScope: (scope: DependencyScope) => void;
   setSearch: (search: string) => void;
-  setShowCrossEdges: (show: boolean) => void;
+  setModuleSearch: (moduleSearch: string) => void;
   setConcern: (concern: string | null) => void;
   resetFilters: () => void;
 }
@@ -29,7 +29,7 @@ const INITIAL_STATE: FilterState = {
   ecosystems: [],
   scopes: [],
   search: '',
-  showCrossEdges: false,
+  moduleSearch: '',
   concern: null,
 };
 
@@ -61,8 +61,8 @@ export const useFilterStore = create<FilterStore>((set) => ({
   setSearch: (search) =>
     set((state) => ({ ...state, search })),
 
-  setShowCrossEdges: (show) =>
-    set((state) => ({ ...state, showCrossEdges: show })),
+  setModuleSearch: (moduleSearch) =>
+    set((state) => ({ ...state, moduleSearch })),
 
   setConcern: (concern) =>
     set((state) => ({ ...state, concern })),

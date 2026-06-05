@@ -20,7 +20,7 @@ const emptyProject: Project = {
 describe('HealthReport', () => {
   beforeEach(() => {
     useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
-    useFilterStore.setState({ ecosystems: [], scopes: [], search: '', showCrossEdges: false, concern: null });
+    useFilterStore.setState({ ecosystems: [], scopes: [], search: '', moduleSearch: '', concern: null });
     useConnectionStore.setState({ status: 'connected' });
     useDetailStore.setState({ selectedDep: null, isEnriching: false, enrichmentRequestId: null, enrichError: null });
     useHealthPrereqStore.getState().reset();

@@ -46,7 +46,7 @@ function makeProject(modules: Module[]): Project {
 describe('useHealthReport', () => {
   beforeEach(() => {
     useProjectStore.setState({ project: null, isScanning: false, lastProgress: null });
-    useFilterStore.setState({ ecosystems: [], scopes: [], search: '', showCrossEdges: false, concern: null });
+    useFilterStore.setState({ ecosystems: [], scopes: [], search: '', moduleSearch: '', concern: null });
   });
 
   it('returns empty when no project', () => {
