@@ -124,6 +124,7 @@ Web UI (React) ←→ WebSocket ←→ Backend (Node.js)
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full architecture document.
+See [docs/future_work.md](docs/future_work.md) for proposed future work.
 
 ## Key Conventions
 
