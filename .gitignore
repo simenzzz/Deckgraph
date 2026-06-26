@@ -43,3 +43,6 @@ Thumbs.db
 # Temporary
 tmp/
 temp/
+
+# Package tarballs (npm pack / pnpm pack output)
+*.tgz

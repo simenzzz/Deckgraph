@@ -1,31 +1,57 @@
 {
-  "name": "@deckgraph/backend",
+  "name": "deckgraph",
   "version": "0.0.1",
-  "description": "Deckgraph backend - CLI and WebSocket server",
+  "description": "Multi-language dependency exploration and audit tool",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deckgraph/deckgraph.git"
+  },
+  "homepage": "https://github.com/deckgraph/deckgraph",
+  "bugs": {
+    "url": "https://github.com/deckgraph/deckgraph/issues"
+  },
+  "keywords": [
+    "dependencies",
+    "monorepo",
+    "dependency-graph",
+    "audit",
+    "multi-language",
+    "cli"
+  ],
   "type": "module",
   "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "bin": {
     "deckgraph": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -b && tsup && node scripts/copy-ui.mjs",
+    "typecheck": "tsc -b",
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "lint": "eslint src/",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm --filter @deckgraph/ui build && npm run build"
   },
   "devDependencies": {
+    "@deckgraph/shared": "workspace:*",
+    "@deckgraph/ui": "workspace:*",
     "@types/js-yaml": "^4.0.9",
     "@types/ws": "^8.5.14",
     "@vitest/coverage-v8": "^2.1.9",
     "pino-pretty": "^13.0.0",
+    "tsup": "^8.3.5",
     "typescript-eslint": "^8.19.1",
     "vitest": "^2.1.9"
   },
   "dependencies": {
     "@babel/parser": "^7.29.2",
-    "@deckgraph/shared": "workspace:*",
     "chokidar": "^5.0.0",
     "commander": "^13.1.0",
     "execa": "^9.6.1",
@@ -36,6 +62,7 @@
     "lru-cache": "^11.2.7",
     "open": "^10.1.0",
     "pino": "^10.3.1",
+    "semver": "^7.6.3",
     "smol-toml": "^1.3.1",
     "tree-sitter-go": "^0.25.0",
     "tree-sitter-java": "^0.23.5",

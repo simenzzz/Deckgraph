@@ -1,6 +1,7 @@
 {
   "name": "@deckgraph/shared",
   "version": "0.0.1",
+  "private": true,
   "description": "Shared types and schemas for Deckgraph",
   "type": "module",
   "main": "./dist/index.js",

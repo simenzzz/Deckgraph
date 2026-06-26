@@ -243,7 +243,7 @@ export function createServer(options: ServerOptions): DeckgraphServer {
             staticHandler(req, res);
           } else {
             res.writeHead(404, { 'Content-Type': 'text/plain' });
-            res.end('UI not built. Run: pnpm --filter @deckgraph/ui build');
+            res.end('UI assets not found. Run: pnpm build');
           }
         });
 

@@ -10,7 +10,7 @@
  *   npx deckgraph --version                    # Print version
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -114,7 +114,7 @@ export async function main(argv?: readonly string[]): Promise<void> {
     }
   }
 
-  const uiDistPath = resolve(__dirname, '../../ui/dist');
+  const uiDistPath = resolve(__dirname, 'ui');
   const server = createServer({
     port,
     host: opts.host,
@@ -149,8 +149,26 @@ export async function main(argv?: readonly string[]): Promise<void> {
   }
 }
 
+/**
+ * True when this module is the program entry point.
+ *
+ * `process.argv[1]` is the path Node was launched with, which is the bin
+ * *symlink* (e.g. node_modules/.bin/deckgraph) when run via the installed
+ * command. We resolve it to its real path before comparing, otherwise the
+ * guard never matches and the CLI silently does nothing.
+ */
+function isMainModule(): boolean {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === __filename;
+  } catch {
+    return false;
+  }
+}
+
 // Run CLI when executed directly
-if (process.argv[1] === __filename) {
+if (isMainModule()) {
   main().catch((error) => {
     const detail = error instanceof Error ? error.message : 'unknown error';
     process.stderr.write(`Error: ${detail}\n`);

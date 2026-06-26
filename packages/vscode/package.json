@@ -1,6 +1,7 @@
 {
   "name": "deckgraph-vscode",
   "version": "0.0.1",
+  "private": true,
   "description": "Deckgraph - VS Code extension for dependency exploration",
   "type": "commonjs",
   "main": "./dist/extension.js",
